@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
+import 'product_list_screen.dart';
 
 /// Placeholder home setelah login berhasil.
 /// Ganti isinya sesuai kebutuhan fitur utama app kamu nanti.
@@ -38,14 +39,22 @@ class HomeScreen extends ConsumerWidget {
                   backgroundImage: NetworkImage(user.photoPath),
                 ),
                 const SizedBox(height: 12),
-                Text(user.fullName,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-                Text('@${user.username}',
-                    style: TextStyle(color: Colors.grey.shade600)),
+                Text(
+                  user.fullName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '@${user.username}',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
                 const SizedBox(height: 20),
-                Text('Business (${authState.businessList.length})',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'Business (${authState.businessList.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 ...authState.businessList.map(
                   (b) => Card(
@@ -55,6 +64,17 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       title: Text(b.name),
                       subtitle: Text(b.userRoleName),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProductListScreen(
+                              businessId: b.idBusiness,
+                              businessName: b.name,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
