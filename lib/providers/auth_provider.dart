@@ -21,6 +21,10 @@ class AuthState {
   final List<BusinessModel> businessList;
   final AuthTokenModel? token;
 
+  /// idBusiness yang lagi aktif dipakai user (buat langsung buka
+  /// ProductListScreen tanpa lewat halaman pilih-bisnis lagi).
+  final String? activeBusinessId;
+
   const AuthState({
     this.status = AuthStatus.unknown,
     this.isLoading = false,
@@ -28,9 +32,20 @@ class AuthState {
     this.user,
     this.businessList = const [],
     this.token,
+    this.activeBusinessId,
   });
 
   String? get accessToken => token?.accessToken;
+
+  /// Business yang lagi aktif. Fallback ke business pertama kalau
+  /// `activeBusinessId` belum/tidak ke-set (mis. baru login).
+  BusinessModel? get activeBusiness {
+    if (businessList.isEmpty) return null;
+    return businessList.firstWhere(
+      (b) => b.idBusiness == activeBusinessId,
+      orElse: () => businessList.first,
+    );
+  }
 
   AuthState copyWith({
     AuthStatus? status,
@@ -40,6 +55,7 @@ class AuthState {
     UserModel? user,
     List<BusinessModel>? businessList,
     AuthTokenModel? token,
+    String? activeBusinessId,
   }) {
     return AuthState(
       status: status ?? this.status,
@@ -48,6 +64,7 @@ class AuthState {
       user: user ?? this.user,
       businessList: businessList ?? this.businessList,
       token: token ?? this.token,
+      activeBusinessId: activeBusinessId ?? this.activeBusinessId,
     );
   }
 }
@@ -84,6 +101,9 @@ class AuthNotifier extends Notifier<AuthState> {
       token: token,
       user: user,
       businessList: businessList,
+      activeBusinessId: businessList.isNotEmpty
+          ? businessList.first.idBusiness
+          : null,
     );
 
     final elapsed = DateTime.now().difference(savedAt);
@@ -152,10 +172,22 @@ class AuthNotifier extends Notifier<AuthState> {
       businessList: result.business,
       token: result.token,
       clearError: true,
+      activeBusinessId: result.business.isNotEmpty
+          ? result.business.first.idBusiness
+          : null,
     );
   }
 
-  /// Data mock, disalin dari contoh response API kamu (user "Ciha XD").
+  /// Dipanggil dari switcher di ProductListScreen saat user ganti bisnis.
+  void setActiveBusiness(String idBusiness) {
+    state = state.copyWith(activeBusinessId: idBusiness);
+  }
+
+  /// Data mock — persis dari contoh response API asli yang kamu kasih
+  /// (user "User Test", 2 bisnis: satu di bawah 200 produk/kategori
+  /// [Burger Restaurant, allProducts:true], satu di atas 200
+  /// [Popular Stationery, allProducts:false]). Dipakai buat testing
+  /// switcher bisnis DAN kedua skenario katalog sekaligus.
   /// Cuma dipakai sebagai FALLBACK saat request beneran gagal di level
   /// network — bukan pengganti login asli. Set
   /// `AppConstants.enableMockLoginFallback = false` untuk mematikan ini
@@ -164,36 +196,51 @@ class AuthNotifier extends Notifier<AuthState> {
     return LoginResponseModel.fromJson({
       'status': 200,
       'data': {
-        'idUser': '44f82b4eafce25bdff2ef7497859d5bdbf64',
-        'firstname': 'Ciha XD',
-        'lastname': 'VOC',
+        'idUser': '2ebc039352c84470d82c1c6d0bf42f29bb34da',
+        'firstname': 'User',
+        'lastname': 'Test',
         'phone': '',
-        'email': 'ciha@gmail.com',
-        'photo': '25/11/_-(58)-1762088031.jpeg',
-        'photoPath':
-            'https://wave-cdn.eon.id/static/user/photo/25/11/_-(58)-1762088031.jpeg',
+        'email': 'user30@mail.com',
+        'photo': '',
+        'photoPath': 'https://wave-cdn.eon.id/static/cdn/no-img.jpg',
         'isDeactivated': false,
-        'username': 'cihaaa',
+        'username': 'u1787547142',
         'hasPage': false,
         'userRoleName': 'Owner',
-        'roleId': '8d3c825fe32cf8afc659f2fbd99ca67d65ad',
+        'roleId': '77850d4cb833de1a41934982a36c5c6c066f6e',
       },
       'business': [
         {
-          'idBusiness': 'c8a8462022cb258475fce759e928adaeba78',
-          'name': 'Ciha Orc',
-          'logo': '25/10/chiv-1761803431.png',
+          'idBusiness': '46e96364c42e6f3132525e75813ea514c8cded',
+          'name': 'Burger Restaurant',
+          'logo': '26/08/Icon-Background-Gradient-1787547236.png',
           'logoPath':
-              'https://wave-cdn.eon.id/static/business/logo/25/10/chiv-1761803431.png',
-          'username': 'Ciwha',
-          'about': 'About',
+              'https://wave-cdn.eon.id/static/business/logo/26/08/Icon-Background-Gradient-1787547236.png',
+          'username': 'burger_restaurant',
+          'about': '',
           'canBeSoldOutOfStock': true,
           'userRoleName': 'Owner',
-          'roleId': '46f0c2f25b5430a6aa40a9c7b2a205458e7e',
+          'roleId': 'ba14afeeddc29018bd2ec8baafb0effb9294bc',
+          'isPremium': true,
+          'premiumStartAt': '2026-08-21T19:46:51+07:00',
+          'premiumExpiresAt': '2026-12-21T19:46:51+07:00',
+          'banned': null,
+        },
+        {
+          'idBusiness': 'f9e4ed4f9c121b3186c5690995bce54a91edce',
+          'name': 'Popular Stationery',
+          'logo': '26/08/eade_logo-1787547316.png',
+          'logoPath':
+              'https://wave-cdn.eon.id/static/business/logo/26/08/eade_logo-1787547316.png',
+          'username': 'popular_st',
+          'about': '',
+          'canBeSoldOutOfStock': true,
+          'userRoleName': 'Owner',
+          'roleId': 'b718fdfdc4e37c71a88a67626596d0c3738fe5',
           'isPremium': false,
           'premiumStartAt': null,
           'premiumExpiresAt': null,
-          'banned': 'ban',
+          'banned': null,
         },
       ],
       'token': {

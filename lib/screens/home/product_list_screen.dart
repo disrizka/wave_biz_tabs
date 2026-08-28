@@ -9,6 +9,11 @@ import 'widgets/product_card.dart';
 /// Halaman katalog produk untuk satu business, berdasarkan endpoint ASLI
 /// `GET /waveup/{idBusiness}/product/pos?category=&brand=`.
 ///
+/// Ini murni konten grid produk (chip kategori + search + grid) - identitas
+/// bisnis yang aktif & switcher-nya ada di level atas (lihat HomeScreen /
+/// AppShell), bukan di screen ini, biar sesuai desain: rail/bottom-nav +
+/// konten polos tanpa AppBar per business.
+///
 /// - Business <= 200 produk (`allProducts: true`): semua kategori & produk
 ///   didapat sekali fetch. Chip "All Product" tersedia, dan pindah kategori
 ///   cuma filter lokal (instan, tanpa network call lagi).
@@ -23,13 +28,8 @@ import 'widgets/product_card.dart';
 ///   halaman berikutnya.
 class ProductListScreen extends ConsumerStatefulWidget {
   final String businessId;
-  final String businessName;
 
-  const ProductListScreen({
-    super.key,
-    required this.businessId,
-    required this.businessName,
-  });
+  const ProductListScreen({super.key, required this.businessId});
 
   @override
   ConsumerState<ProductListScreen> createState() => _ProductListScreenState();
@@ -66,15 +66,45 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     return 2;
   }
 
+  Widget _searchField(ProductHomeState state) {
+    return TextField(
+      controller: _searchController,
+      onChanged: ref
+          .read(productHomeProvider(widget.businessId).notifier)
+          .search,
+      style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+      decoration: InputDecoration(
+        hintText: state.allProducts
+            ? 'Quick search product/menu...'
+            : 'Cari produk di kategori ini...',
+        hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13.5),
+        prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey.shade500),
+        filled: true,
+        fillColor: const Color(0xFFF4F5F9),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF3B5FE0), width: 1.4),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(productHomeProvider(widget.businessId));
     final notifier = ref.read(productHomeProvider(widget.businessId).notifier);
     final columns = _gridColumns(context);
     final products = state.visibleProducts;
+    final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.businessName)),
+      backgroundColor: Colors.white,
       body: RefreshIndicator(
         onRefresh: notifier.refresh,
         child: state.error != null
@@ -88,45 +118,45 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (state.categories.isNotEmpty) ...[
-                            CategoryChipRow(
-                              categories: state.categories,
-                              selectedCategoryId: state.selectedCategoryId,
-                              showAllChip: state.allProducts,
-                              onSelect: notifier.selectCategory,
-                            ),
-                            const SizedBox(height: 12),
-                          ],
-                          TextField(
-                            controller: _searchController,
-                            onChanged: notifier.search,
-                            decoration: InputDecoration(
-                              hintText: state.allProducts
-                                  ? 'Quick search product/menu...'
-                                  : 'Cari produk di kategori ini...',
-                              prefixIcon: const Icon(Icons.search),
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 0,
+                          if (isMobile) ...[
+                            // Mobile (figma): search dulu di atas, chip di bawahnya.
+                            _searchField(state),
+                            if (state.categories.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              CategoryChipRow(
+                                categories: state.categories,
+                                selectedCategoryId: state.selectedCategoryId,
+                                showAllChip: state.allProducts,
+                                onSelect: notifier.selectCategory,
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
-                          ),
-                          if (!state.allProducts && !state.isSearching)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                'Katalog besar (> 200 produk) - browse per kategori supaya tetap cepat.',
-                                style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 11.5,
+                            ],
+                          ] else ...[
+                            // Tablet/desktop (figma): chip & search sejajar.
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (state.categories.isNotEmpty)
+                                  Expanded(
+                                    child: CategoryChipRow(
+                                      categories: state.categories,
+                                      selectedCategoryId:
+                                          state.selectedCategoryId,
+                                      showAllChip: state.allProducts,
+                                      onSelect: notifier.selectCategory,
+                                    ),
+                                  )
+                                else
+                                  const Spacer(),
+                                const SizedBox(width: 16),
+                                SizedBox(
+                                  width: 300,
+                                  child: _searchField(state),
                                 ),
-                              ),
+                              ],
                             ),
+                          ],
+                          if (!state.allProducts && !state.isSearching)
+                            Padding(padding: const EdgeInsets.only(top: 8)),
                         ],
                       ),
                     ),
@@ -156,11 +186,22 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                           crossAxisSpacing: 12,
                           childAspectRatio: 0.68,
                         ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) =>
-                              ProductCard(product: products[index]),
-                          childCount: products.length,
-                        ),
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final p = products[index];
+                          return ProductCard(
+                            product: p,
+                            onAdd: () {
+                              ScaffoldMessenger.of(context)
+                                ..hideCurrentSnackBar()
+                                ..showSnackBar(
+                                  SnackBar(
+                                    content: Text('${p.name} ditambahkan'),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                            },
+                          );
+                        }, childCount: products.length),
                       ),
                     ),
                     SliverToBoxAdapter(

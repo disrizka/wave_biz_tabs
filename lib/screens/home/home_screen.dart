@@ -1,85 +1,468 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
 
+import '../../models/business_model.dart';
 import '../../providers/auth_provider.dart';
+
 import 'product_list_screen.dart';
 
-/// Placeholder home setelah login berhasil.
-/// Ganti isinya sesuai kebutuhan fitur utama app kamu nanti.
-class HomeScreen extends ConsumerWidget {
+/// Shell utama setelah login.
+///
+/// - Lebar >= 700 (tablet/desktop) -> NavigationRail ikon di kiri, tampil
+///   sebagai panel putih melayang (shadow halus) dengan jarak dari tepi.
+///   * Tap **logo** di atas rail -> buka business switcher (list bisnis
+///     saja, tanpa tombol Keluar).
+///   * Tap ikon **Profile** di bawah rail -> langsung minta konfirmasi
+///     logout (tanpa switcher).
+/// - Lebar < 700 (HP) -> BottomNavigationBar di bawah. Karena cuma ada
+///   1 slot ikon Profile buat 2 fungsi itu, tap Profile di HP membuka
+///   switcher lengkap (list bisnis + tombol Keluar) - kalau cuma ada 1
+///   bisnis, langsung logout.
+///
+/// CATATAN: label/ikon tab "Pesanan" & "Transaksi" itu placeholder karena
+/// belum ada spesifikasi screen-nya - tinggal ganti body-nya di
+/// `_ComingSoonScreen` kalau sudah ada halaman aslinya.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final user = authState.user;
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('WAVEUP'),
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  int _tabIndex = 0;
+
+  static const _tabs = [
+    _NavItem(icon: Icons.note_add_rounded, label: 'Produk'),
+    _NavItem(
+      icon: Icons.receipt_long_outlined,
+      label: 'Pesanan',
+      hasBadge: true,
+    ),
+    _NavItem(icon: Icons.account_balance_wallet_outlined, label: 'Transaksi'),
+  ];
+
+  /// Buka business switcher. `showLogout` false dipakai buat tap logo
+  /// (murni pindah bisnis), true dipakai buat tap Profile di mobile.
+  void _openSwitcher(
+    BusinessModel active,
+    List<BusinessModel> list, {
+    bool showLogout = true,
+  }) {
+    if (list.length <= 1 && !showLogout) return; // logo: tidak ada yg di-switch
+    showBusinessSwitcher(
+      context,
+      businessList: list,
+      activeBusinessId: active.idBusiness,
+      onSelected: (b) =>
+          ref.read(authProvider.notifier).setActiveBusiness(b.idBusiness),
+      onLogout: _confirmLogout,
+      showLogout: showLogout,
+    );
+  }
+
+  /// Dipakai untuk ikon Profile di mobile: kalau cuma 1 bisnis (switcher
+  /// nggak relevan), langsung minta konfirmasi logout.
+  void _handleMobileProfileTap(BusinessModel active, List<BusinessModel> list) {
+    if (list.length <= 1) {
+      _confirmLogout();
+    } else {
+      _openSwitcher(active, list, showLogout: true);
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Keluar dari akun?'),
+        content: const Text('Kamu perlu login lagi untuk masuk ke akun ini.'),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacementNamed('/login');
-              }
-            },
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Keluar'),
           ),
         ],
       ),
-      body: user == null
-          ? const Center(child: Text('Belum ada data user'))
-          : ListView(
-              padding: const EdgeInsets.all(20),
+    );
+    if (confirmed == true) {
+      await _logout();
+    }
+  }
+
+  Future<void> _logout() async {
+    await ref.read(authProvider.notifier).logout();
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final activeBusiness = authState.activeBusiness;
+
+    if (activeBusiness == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('WAVEUP'),
+          actions: [
+            IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          ],
+        ),
+        body: const Center(child: Text('Belum ada bisnis terdaftar')),
+      );
+    }
+
+    final page = IndexedStack(
+      index: _tabIndex,
+      children: [
+        ProductListScreen(
+          key: ValueKey(activeBusiness.idBusiness),
+          businessId: activeBusiness.idBusiness,
+        ),
+        const _ComingSoonScreen(title: 'Pesanan'),
+        const _ComingSoonScreen(title: 'Transaksi'),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 700;
+
+        if (isWide) {
+          return Scaffold(
+            backgroundColor: const Color(0xFFF4F6FB),
+            body: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                CircleAvatar(
-                  radius: 32,
-                  backgroundImage: NetworkImage(user.photoPath),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  user.fullName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                _SideRail(
+                  tabs: _tabs,
+                  selectedIndex: _tabIndex,
+                  onSelectTab: (i) => setState(() => _tabIndex = i),
+                  onTapLogo: () => _openSwitcher(
+                    activeBusiness,
+                    authState.businessList,
+                    showLogout: false,
                   ),
+                  onTapProfile: _confirmLogout,
                 ),
-                Text(
-                  '@${user.username}',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Business (${authState.businessList.length})',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                ...authState.businessList.map(
-                  (b) => Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: NetworkImage(b.logoPath),
-                      ),
-                      title: Text(b.name),
-                      subtitle: Text(b.userRoleName),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ProductListScreen(
-                              businessId: b.idBusiness,
-                              businessName: b.name,
-                            ),
-                          ),
-                        );
-                      },
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      bottomLeft: Radius.circular(24),
                     ),
+                    child: Container(color: Colors.white, child: page),
                   ),
                 ),
               ],
             ),
+          );
+        }
+
+        return Scaffold(
+          body: SafeArea(child: page),
+          bottomNavigationBar: _BottomNav(
+            tabs: _tabs,
+            selectedIndex: _tabIndex,
+            onSelectTab: (i) => setState(() => _tabIndex = i),
+            onTapProfile: () =>
+                _handleMobileProfileTap(activeBusiness, authState.businessList),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NavItem {
+  final IconData icon;
+  final String label;
+  final bool hasBadge;
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    this.hasBadge = false,
+  });
+}
+
+/// Rail kiri (tablet/desktop): logo brand di atas (buka switcher, tanpa
+/// logout), tab produk/pesanan/transaksi di tengah, ikon Profile di bawah
+/// (langsung minta konfirmasi logout). Tampil sebagai panel putih melayang
+/// dengan shadow halus dan jarak dari tepi layar.
+class _SideRail extends StatelessWidget {
+  const _SideRail({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onSelectTab,
+    required this.onTapLogo,
+    required this.onTapProfile,
+  });
+
+  final List<_NavItem> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onTapLogo;
+  final VoidCallback onTapProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 84,
+      margin: const EdgeInsets.fromLTRB(14, 16, 10, 16),
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Tooltip(
+            message: 'Pilih bisnis',
+            child: InkWell(
+              onTap: onTapLogo,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: 46,
+                height: 46,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF1FD),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFDCE2FA)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Image.asset(
+                    'assets/images/icon.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.storefront,
+                      size: 20,
+                      color: Color(0xFF3B5FE0),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          for (var i = 0; i < tabs.length; i++) ...[
+            _RailIcon(
+              icon: tabs[i].icon,
+              selected: i == selectedIndex,
+              hasBadge: tabs[i].hasBadge,
+              onTap: () => onSelectTab(i),
+            ),
+            const SizedBox(height: 10),
+          ],
+          const Spacer(),
+          Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            height: 1,
+            width: 28,
+            color: Colors.grey.shade200,
+          ),
+          const SizedBox(height: 12),
+          Tooltip(
+            message: 'Keluar',
+            child: _RailIcon(
+              icon: Icons.person_outline,
+              selected: false,
+              onTap: onTapProfile,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RailIcon extends StatelessWidget {
+  const _RailIcon({
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.hasBadge = false,
+  });
+
+  final IconData icon;
+  final bool selected;
+  final bool hasBadge;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 50,
+        height: 50,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF3B5FE0) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF3B5FE0).withOpacity(0.32),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 22,
+              color: selected ? Colors.white : Colors.grey.shade500,
+            ),
+            if (hasBadge)
+              Positioned(
+                top: -2,
+                right: 4,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? const Color(0xFF3B5FE0) : Colors.white,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom nav (HP): sama seperti rail, plus ikon Profile paling kanan.
+/// Karena di HP cuma ada 1 slot buat 2 fungsi (switch bisnis & logout),
+/// tap Profile membuka switcher lengkap (dengan tombol Keluar di
+/// dalamnya) - kalau cuma 1 bisnis, langsung minta konfirmasi logout
+/// (lihat `_handleMobileProfileTap`).
+class _BottomNav extends StatelessWidget {
+  const _BottomNav({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onSelectTab,
+    required this.onTapProfile,
+  });
+
+  final List<_NavItem> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onTapProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final profileIndex = tabs.length;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: BottomNavigationBar(
+        currentIndex: selectedIndex,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        selectedItemColor: const Color(0xFF3B5FE0),
+        unselectedItemColor: Colors.grey.shade500,
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
+        onTap: (i) {
+          if (i == profileIndex) {
+            onTapProfile();
+            return;
+          }
+          onSelectTab(i);
+        },
+        items: [
+          for (final t in tabs)
+            BottomNavigationBarItem(
+              icon: t.hasBadge
+                  ? Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(t.icon),
+                        Positioned(
+                          top: -2,
+                          right: -3,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Icon(t.icon),
+              label: t.label,
+            ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComingSoonScreen extends StatelessWidget {
+  const _ComingSoonScreen({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.hourglass_empty, size: 40, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text(
+            '$title - segera hadir',
+            style: TextStyle(color: Colors.grey.shade500),
+          ),
+        ],
+      ),
     );
   }
 }
