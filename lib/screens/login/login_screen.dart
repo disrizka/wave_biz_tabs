@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:wave_biz_tabs/core/responsive.dart';
+import 'package:wave_biz_tabs/screens/login/widgets/mobile_login_layout.dart';
+import 'package:wave_biz_tabs/screens/login/widgets/tablet_login_layout.dart';
 
-import '../../core/responsive.dart';
-import 'widgets/mobile_login_layout.dart';
-import 'widgets/tablet_login_layout.dart';
-
-/// Entry point untuk halaman login.
-/// Yang nentuin mobile vs tablet/web bukan platform-nya,
-/// tapi LEBAR LAYAR (pakai LayoutBuilder), jadi kalau window
-/// di desktop di-resize kecil pun otomatis balik ke layout mobile.
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 

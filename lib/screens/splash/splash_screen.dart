@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../providers/auth_provider.dart';
+import 'package:wave_biz_tabs/providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -31,7 +30,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Colors.white,
-      body: Center(child: Image(image: AssetImage('assets/images/icon.png'))),
+      body: Center(
+        child: SizedBox(
+          width: 140,
+          height: 140,
+          child: Image(image: AssetImage('assets/images/icon.png')),
+        ),
+      ),
     );
   }
 }

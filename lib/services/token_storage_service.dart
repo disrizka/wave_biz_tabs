@@ -1,17 +1,10 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:wave_biz_tabs/core/constants.dart';
+import 'package:wave_biz_tabs/models/auth_response_model.dart';
+import 'package:wave_biz_tabs/models/business_model.dart';
+import 'package:wave_biz_tabs/models/user_model.dart';
 
-import '../core/constants.dart';
-import '../models/auth_response_model.dart';
-import '../models/user_model.dart';
-import '../models/business_model.dart';
-
-/// Semua urusan simpan/baca/hapus data auth di local storage
-/// dikumpulkan di sini biar AuthNotifier gak berantakan.
-///
-/// Pakai flutter_secure_storage (bukan shared_preferences) karena isinya
-/// token — disimpan terenkripsi (Keychain di iOS, EncryptedSharedPreferences
-/// di Android), bukan plain text.
 class TokenStorageService {
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),

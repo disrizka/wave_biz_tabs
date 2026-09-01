@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:wave_biz_tabs/core/constants.dart';
+import 'package:wave_biz_tabs/screens/login/widgets/login_form_card.dart';
 
-import '../../../core/constants.dart';
-import 'login_form_card.dart';
-
-/// Layout login untuk tablet & web: split 2 kolom.
-/// Kiri: logo + ilustrasi + caption promosi.
-/// Kanan: form login di atas background lavender, mengambang di tengah.
-/// Sesuai referensi desain tablet/web kamu.
 class TabletLoginLayout extends StatelessWidget {
   const TabletLoginLayout({super.key});
 
@@ -14,7 +9,6 @@ class TabletLoginLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Panel kiri
         Expanded(
           flex: 6,
           child: Container(

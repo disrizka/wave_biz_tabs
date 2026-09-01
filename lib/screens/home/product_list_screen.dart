@@ -1,31 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wave_biz_tabs/core/responsive.dart';
+import 'package:wave_biz_tabs/providers/product_provider.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/category_chip_row.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/product_card.dart';
 
-import '../../core/responsive.dart';
-import '../../providers/product_provider.dart';
-import 'widgets/category_chip_row.dart';
-import 'widgets/product_card.dart';
-
-/// Halaman katalog produk untuk satu business, berdasarkan endpoint ASLI
-/// `GET /waveup/{idBusiness}/product/pos?category=&brand=`.
-///
-/// Ini murni konten grid produk (chip kategori + search + grid) - identitas
-/// bisnis yang aktif & switcher-nya ada di level atas (lihat HomeScreen /
-/// AppShell), bukan di screen ini, biar sesuai desain: rail/bottom-nav +
-/// konten polos tanpa AppBar per business.
-///
-/// - Business <= 200 produk (`allProducts: true`): semua kategori & produk
-///   didapat sekali fetch. Chip "All Product" tersedia, dan pindah kategori
-///   cuma filter lokal (instan, tanpa network call lagi).
-/// - Business > 200 produk (`allProducts: false`): tidak ada chip "All
-///   Product" (backend memang tidak menyediakan itu sekaligus) - user pilih
-///   1 kategori, baru produknya di-fetch. Kategori pertama dipilih otomatis
-///   dari preview default yang dikasih backend.
-/// - Di kedua mode, grid awalnya cuma nampilin 20 item (`kPageRevealBatch`)
-///   biar render cepat, nambah 20 lagi tiap discroll mendekati bawah -
-///   ini murni di client selama datanya sudah ke-fetch; kalau kategori itu
-///   sendiri > 200 produk (jarang, tapi mungkin), baru nembak API lagi buat
-///   halaman berikutnya.
 class ProductListScreen extends ConsumerStatefulWidget {
   final String businessId;
 
@@ -131,7 +110,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                               ),
                             ],
                           ] else ...[
-                            // Tablet/desktop (figma): chip & search sejajar.
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [

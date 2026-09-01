@@ -3,15 +3,6 @@ import 'package:wave_biz_tabs/models/business_model.dart';
 
 const _kBrandBlue = Color(0xFF3B5FE0);
 
-/// Entry point tunggal buat munculin business switcher.
-/// Otomatis pilih bottom sheet (HP) atau dialog (tablet) berdasarkan
-/// lebar layar saat ini.
-///
-/// `showLogout` mengatur apakah tombol "Keluar" ditampilkan di bawah list:
-/// - true  (default) -> dipakai saat dibuka dari ikon Profile (perlu opsi
-///   keluar juga di sini, mis. di bottom nav mobile).
-/// - false -> dipakai saat dibuka dari ikon logo/brand di rail, murni buat
-///   pindah bisnis tanpa opsi keluar.
 Future<void> showBusinessSwitcher(
   BuildContext context, {
   required List<BusinessModel> businessList,

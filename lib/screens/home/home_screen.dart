@@ -1,28 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wave_biz_tabs/models/business_model.dart';
+import 'package:wave_biz_tabs/providers/auth_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
-
-import '../../models/business_model.dart';
-import '../../providers/auth_provider.dart';
-
 import 'product_list_screen.dart';
 
-/// Shell utama setelah login.
-///
-/// - Lebar >= 700 (tablet/desktop) -> NavigationRail ikon di kiri, tampil
-///   sebagai panel putih melayang (shadow halus) dengan jarak dari tepi.
-///   * Tap **logo** di atas rail -> buka business switcher (list bisnis
-///     saja, tanpa tombol Keluar).
-///   * Tap ikon **Profile** di bawah rail -> langsung minta konfirmasi
-///     logout (tanpa switcher).
-/// - Lebar < 700 (HP) -> BottomNavigationBar di bawah. Karena cuma ada
-///   1 slot ikon Profile buat 2 fungsi itu, tap Profile di HP membuka
-///   switcher lengkap (list bisnis + tombol Keluar) - kalau cuma ada 1
-///   bisnis, langsung logout.
-///
-/// CATATAN: label/ikon tab "Pesanan" & "Transaksi" itu placeholder karena
-/// belum ada spesifikasi screen-nya - tinggal ganti body-nya di
-/// `_ComingSoonScreen` kalau sudah ada halaman aslinya.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -43,14 +25,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _NavItem(icon: Icons.account_balance_wallet_outlined, label: 'Transaksi'),
   ];
 
-  /// Buka business switcher. `showLogout` false dipakai buat tap logo
-  /// (murni pindah bisnis), true dipakai buat tap Profile di mobile.
   void _openSwitcher(
     BusinessModel active,
     List<BusinessModel> list, {
     bool showLogout = true,
   }) {
-    if (list.length <= 1 && !showLogout) return; // logo: tidak ada yg di-switch
+    if (list.length <= 1 && !showLogout) return;
     showBusinessSwitcher(
       context,
       businessList: list,
@@ -62,8 +42,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// Dipakai untuk ikon Profile di mobile: kalau cuma 1 bisnis (switcher
-  /// nggak relevan), langsung minta konfirmasi logout.
   void _handleMobileProfileTap(BusinessModel active, List<BusinessModel> list) {
     if (list.length <= 1) {
       _confirmLogout();
@@ -195,10 +173,6 @@ class _NavItem {
   });
 }
 
-/// Rail kiri (tablet/desktop): logo brand di atas (buka switcher, tanpa
-/// logout), tab produk/pesanan/transaksi di tengah, ikon Profile di bawah
-/// (langsung minta konfirmasi logout). Tampil sebagai panel putih melayang
-/// dengan shadow halus dan jarak dari tepi layar.
 class _SideRail extends StatelessWidget {
   const _SideRail({
     required this.tabs,
@@ -362,11 +336,6 @@ class _RailIcon extends StatelessWidget {
   }
 }
 
-/// Bottom nav (HP): sama seperti rail, plus ikon Profile paling kanan.
-/// Karena di HP cuma ada 1 slot buat 2 fungsi (switch bisnis & logout),
-/// tap Profile membuka switcher lengkap (dengan tombol Keluar di
-/// dalamnya) - kalau cuma 1 bisnis, langsung minta konfirmasi logout
-/// (lihat `_handleMobileProfileTap`).
 class _BottomNav extends StatelessWidget {
   const _BottomNav({
     required this.tabs,

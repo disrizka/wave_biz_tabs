@@ -29,9 +29,11 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final success = await ref.read(authProvider.notifier).login(
+    final success = await ref
+        .read(authProvider.notifier)
+        .login(
           username: _usernameController.text.trim(),
-          password: _passwordController.text,
+          password: _passwordController.text.trim(),
         );
 
     if (!mounted) return;
@@ -41,9 +43,9 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
     } else {
       final error = ref.read(authProvider).errorMessage;
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
       }
     }
   }
@@ -84,11 +86,17 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
             ),
             const SizedBox(height: 24),
 
-            const Text('Username',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const Text(
+              'Username',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
             const SizedBox(height: 6),
             TextFormField(
               controller: _usernameController,
+              keyboardType: TextInputType.emailAddress,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              enableSuggestions: false,
               decoration: _inputDecoration('E.g user0001@gmail.com'),
               validator: (value) => (value == null || value.trim().isEmpty)
                   ? 'Username wajib diisi'
@@ -96,12 +104,16 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
             ),
             const SizedBox(height: 18),
 
-            const Text('Password',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const Text(
+              'Password',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
             const SizedBox(height: 6),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
+              autocorrect: false,
+              enableSuggestions: false,
               decoration: _inputDecoration('Fill your password here').copyWith(
                 suffixIcon: IconButton(
                   icon: Icon(

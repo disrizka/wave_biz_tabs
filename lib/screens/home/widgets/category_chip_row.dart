@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-
-import '../../../models/product_model.dart';
+import 'package:wave_biz_tabs/models/product_model.dart';
 
 const _kBrandBlue = Color(0xFF3B5FE0);
 
-/// Trigger "All Product" + tombol "Kategori: X v" yang membuka dropdown
-/// mega-menu di bawahnya (mirip dropdown "Produk" / "Top Up & Tagihan" di
-/// Telkomsel) - isinya SEMUA kategori dalam grid multi-kolom + search,
-/// bukan chip yang di-wrap permanen di layar.
 class CategoryChipRow extends StatefulWidget {
   const CategoryChipRow({
     super.key,
@@ -60,10 +55,6 @@ class _CategoryChipRowState extends State<CategoryChipRow> {
         : (screenSize.width < 900 ? 480.0 : 640.0);
     final panelMaxHeight = (screenSize.height * 0.6).clamp(280.0, 470.0);
 
-    // Panel by default aligns to the button's left edge. On narrow screens
-    // (or when the button sits far right) that can push the panel past the
-    // screen edge and get clipped. Shift it left just enough to stay within
-    // [edgeMargin, screenWidth - edgeMargin].
     double dx = 0;
     final wouldOverflowRight =
         buttonGlobalPos.dx + panelWidth > screenSize.width - edgeMargin;
@@ -234,10 +225,6 @@ class _Chip extends StatelessWidget {
   }
 }
 
-/// Panel mega-menu: search box + grid multi-kolom semua kategori,
-/// scrollable kalau isinya banyak (200+). Grid dikasih garis tipis
-/// pemisah antar baris/kolom, item aktif ditandai kartu rounded biru
-/// muda dengan checklist bulat kecil di kanan.
 class _MegaMenuPanel extends StatefulWidget {
   const _MegaMenuPanel({
     required this.width,

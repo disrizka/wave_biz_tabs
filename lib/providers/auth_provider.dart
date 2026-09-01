@@ -1,18 +1,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../core/constants.dart';
-import '../models/auth_response_model.dart';
-import '../models/user_model.dart';
-import '../models/business_model.dart';
-import '../services/api_service.dart';
-import '../services/token_storage_service.dart';
+import 'package:wave_biz_tabs/core/constants.dart';
+import 'package:wave_biz_tabs/models/auth_response_model.dart';
+import 'package:wave_biz_tabs/models/business_model.dart';
+import 'package:wave_biz_tabs/models/user_model.dart';
+import 'package:wave_biz_tabs/services/api_service.dart';
+import 'package:wave_biz_tabs/services/token_storage_service.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
-/// State immutable untuk auth. Riverpod nge-rebuild widget yang watch
-/// setiap kali object AuthState baru di-emit lewat copyWith.
 class AuthState {
   final AuthStatus status;
   final bool isLoading;
@@ -20,9 +17,6 @@ class AuthState {
   final UserModel? user;
   final List<BusinessModel> businessList;
   final AuthTokenModel? token;
-
-  /// idBusiness yang lagi aktif dipakai user (buat langsung buka
-  /// ProductListScreen tanpa lewat halaman pilih-bisnis lagi).
   final String? activeBusinessId;
 
   const AuthState({
@@ -36,9 +30,6 @@ class AuthState {
   });
 
   String? get accessToken => token?.accessToken;
-
-  /// Business yang lagi aktif. Fallback ke business pertama kalau
-  /// `activeBusinessId` belum/tidak ke-set (mis. baru login).
   BusinessModel? get activeBusiness {
     if (businessList.isEmpty) return null;
     return businessList.firstWhere(
@@ -69,7 +60,6 @@ class AuthState {
   }
 }
 
-/// Pakai API modern Riverpod: `Notifier` + `NotifierProvider`.
 class AuthNotifier extends Notifier<AuthState> {
   late final ApiService _api;
   late final TokenStorageService _storage;
@@ -83,7 +73,6 @@ class AuthNotifier extends Notifier<AuthState> {
     return const AuthState();
   }
 
-  /// Dipanggil sekali di splash screen untuk cek apakah ada sesi tersimpan.
   Future<void> tryAutoLogin() async {
     final session = await _storage.loadSession();
 
@@ -132,10 +121,6 @@ class AuthNotifier extends Notifier<AuthState> {
       await _applySuccessfulLogin(result);
       return true;
     } on ApiNetworkException catch (e) {
-      // Request gagal di level NETWORK (CORS/timeout/no connection) —
-      // BUKAN salah username/password. Sementara pakai data mock biar
-      // alur ke Home tetap bisa dites, sambil masalah konektivitasnya
-      // dibenerin (lihat AppConstants.enableMockLoginFallback).
       debugPrint('[AuthNotifier] Network error saat login: $e');
       if (AppConstants.enableMockLoginFallback) {
         await _applySuccessfulLogin(_mockLoginResult());
@@ -144,8 +129,6 @@ class AuthNotifier extends Notifier<AuthState> {
       state = state.copyWith(isLoading: false, errorMessage: e.message);
       return false;
     } on ApiException catch (e) {
-      // Server berhasil dijawab tapi isinya error beneran
-      // (mis. username/password salah) -> jangan di-mock, tampilkan asli.
       state = state.copyWith(isLoading: false, errorMessage: e.message);
     } catch (e) {
       state = state.copyWith(
@@ -178,20 +161,10 @@ class AuthNotifier extends Notifier<AuthState> {
     );
   }
 
-  /// Dipanggil dari switcher di ProductListScreen saat user ganti bisnis.
   void setActiveBusiness(String idBusiness) {
     state = state.copyWith(activeBusinessId: idBusiness);
   }
 
-  /// Data mock — persis dari contoh response API asli yang kamu kasih
-  /// (user "User Test", 2 bisnis: satu di bawah 200 produk/kategori
-  /// [Burger Restaurant, allProducts:true], satu di atas 200
-  /// [Popular Stationery, allProducts:false]). Dipakai buat testing
-  /// switcher bisnis DAN kedua skenario katalog sekaligus.
-  /// Cuma dipakai sebagai FALLBACK saat request beneran gagal di level
-  /// network — bukan pengganti login asli. Set
-  /// `AppConstants.enableMockLoginFallback = false` untuk mematikan ini
-  /// setelah masalah CORS/network-nya kelar.
   LoginResponseModel _mockLoginResult() {
     return LoginResponseModel.fromJson({
       'status': 200,

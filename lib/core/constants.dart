@@ -10,8 +10,11 @@ class ApiConstants {
   //   - Refresh-Token: <refresh_token milik user, tanpa prefix "Bearer">
   static const String refreshToken = '$baseUrl/user/refresh-token';
 
-  // Kredensial tetap milik app (bukan token per-user), dipakai khusus
-  // untuk request GET /user/refresh-token.
+  // Kredensial tetap milik app (bukan token per-user). Dipakai untuk:
+  //   - POST /user/login    -> header Authorization: Basic <credential>
+  //   - GET  /user/refresh-token -> header Authorization: Basic <credential>
+  //     (ditemukan dari tab Headers Postman, ternyata WAJIB juga untuk login,
+  //     bukan cuma refresh-token seperti dugaan awal)
   static const String basicAuthCredential =
       'Basic bWFudWFsX2FwcDpkZGY0YjY1OTE2NTc2N2E2Mjc4NGY5NGM0ZWU1NmQwNzVkYjEwYzk0NTBkYTVjZjgxYjZhZjdiOWY1NmYxZWY3';
 }
@@ -30,7 +33,7 @@ class AppConstants {
   /// ke API (biasanya CORS kalau run di web/Chrome) diselesaikan.
   ///
   /// Set ke `false` sebelum rilis / setelah API-nya beneran bisa diakses.
-  static const bool enableMockLoginFallback = true;
+  static const bool enableMockLoginFallback = false;
 }
 
 class StorageKeys {

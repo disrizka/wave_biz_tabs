@@ -1,38 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../models/product_model.dart';
-import '../providers/auth_provider.dart';
-import '../services/product_service.dart';
+import 'package:wave_biz_tabs/models/product_model.dart';
+import 'package:wave_biz_tabs/providers/auth_provider.dart';
+import 'package:wave_biz_tabs/services/product_service.dart';
 
 const int kPageRevealBatch = 20;
 
 class ProductHomeState {
   final bool isLoading;
   final String? error;
-
-  /// Langsung dari field `allProducts` response API.
-  /// true  -> business <= 200 produk, semua kategori & produk sudah lengkap
-  ///          di satu response, chip "All Product" tersedia.
-  /// false -> business > 200 produk, harus pilih kategori manual, tidak ada
-  ///          opsi "All Product" (backend tidak menyediakan itu sekaligus).
   final bool allProducts;
-
   final List<ProductCategoryModel> categories;
-
-  /// key = categoryName (sesuai grouping dari backend).
   final Map<String, List<ProductModel>> productsByCategoryName;
-
-  /// null hanya valid kalau [allProducts] true (artinya chip "All Product"
-  /// yang aktif). Kalau [allProducts] false, ini selalu terisi.
   final String? selectedCategoryId;
-
   final String search;
-
-  /// Berapa item yang "dibuka" dari list kategori yang lagi aktif -
-  /// ini yang bikin UI kerasa nampil cepat (20 dulu), nambah pas discroll,
-  /// murni di client (tidak nembak API lagi) selama datanya masih ada.
   final int revealCount;
-
   final ProductPageMeta? pageMeta;
   final int backendPage;
   final bool loadingMore;
@@ -59,21 +40,14 @@ class ProductHomeState {
     return null;
   }
 
-  /// Produk kategori yang lagi aktif (atau semua produk kalau chip "All
-  /// Product" dipilih), SEBELUM kena search & reveal-windowing.
   List<ProductModel> get _activeFullList {
     if (selectedCategoryId == null) {
-      // Chip "All Product" -> gabung semua kategori yang sudah kita punya.
       return productsByCategoryName.values.expand((e) => e).toList();
     }
     final name = _categoryNameOf(selectedCategoryId);
     return productsByCategoryName[name] ?? const [];
   }
 
-  /// List yang benar-benar dirender di grid.
-  /// - Kalau lagi search: tampilkan semua hasil match (datanya sudah ada
-  ///   di memori, jadi tidak perlu windowing lagi).
-  /// - Kalau tidak search: batasi sejumlah [revealCount] biar render cepat.
   List<ProductModel> get visibleProducts {
     final full = _activeFullList;
     if (search.trim().isEmpty) {
@@ -125,11 +99,6 @@ class ProductHomeState {
   }
 }
 
-/// PENTING (Riverpod 3.x): tidak ada lagi `FamilyNotifier<State, Arg>`.
-/// Notifier family sekarang tetap pakai `Notifier<State>` biasa, dan
-/// argumen family (`businessId`) di-inject lewat CONSTRUCTOR, bukan lewat
-/// parameter `build(arg)`. Satu instance notifier dibuat per businessId
-/// oleh factory yang dikasih ke `NotifierProvider.family(...)` di bawah.
 class ProductHomeNotifier extends Notifier<ProductHomeState> {
   ProductHomeNotifier(this.businessId);
 
@@ -158,7 +127,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           allProducts: true,
           categories: resp.categories,
           productsByCategoryName: resp.productsByCategoryName,
-          clearSelectedCategory: true, // "All Product" aktif by default
+          clearSelectedCategory: true,
           pageMeta: resp.page,
           backendPage: 1,
           revealCount: kPageRevealBatch,
@@ -166,9 +135,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
         return;
       }
 
-      // allProducts == false -> backend ngasih preview 1 kategori default.
-      // Cari id kategori yang cocok sama nama grup yang dibalikin, biar
-      // chip yang aktif kepilih otomatis & konsisten.
       String? defaultCategoryId;
       if (resp.productsByCategoryName.isNotEmpty) {
         final defaultName = resp.productsByCategoryName.keys.first;
@@ -194,10 +160,8 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     }
   }
 
-  /// Tap chip kategori ("All Product" cuma ada kalau state.allProducts==true).
   Future<void> selectCategory(String? categoryId) async {
     if (state.allProducts) {
-      // Semua data sudah ada di memori -> filter lokal, tanpa network call.
       state = state.copyWith(
         selectedCategoryId: categoryId,
         clearSelectedCategory: categoryId == null,
@@ -222,9 +186,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
         businessId: businessId,
         categoryId: categoryId,
       );
-      // Ganti isi kategori ini aja (kategori lain yang sempat ke-cache
-      // sebelumnya tidak relevan lagi untuk tampilan "all products" karena
-      // allProducts == false, jadi cukup replace).
+
       state = state.copyWith(
         isLoading: false,
         productsByCategoryName: resp.productsByCategoryName,
@@ -240,8 +202,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     state = state.copyWith(search: query);
   }
 
-  /// Dipanggil pas scroll mendekati bawah. Ini yang mewujudkan
-  /// "tampil 20 dulu, nanti kalau di-scroll/lihat semua baru load lagi".
   Future<void> loadMore() async {
     if (state.loadingMore) return;
 
@@ -282,9 +242,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
   Future<void> refresh() => _init();
 }
 
-/// `NotifierProvider.family<NotifierT, StateT, ArgT>(NotifierT Function(ArgT) create)`
-/// -> di Riverpod 3.x, `create` cuma nerima `arg` dan harus BIKIN instance
-/// notifier-nya sendiri (beda dari v2 yang pakai `.new` + `build(arg)`).
 final productHomeProvider =
     NotifierProvider.family<ProductHomeNotifier, ProductHomeState, String>(
       (businessId) => ProductHomeNotifier(businessId),

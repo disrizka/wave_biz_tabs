@@ -15,20 +15,11 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// Khusus dilempar kalau request-nya gagal di level NETWORK
-/// (gagal konek, timeout, CORS diblokir browser, dll) — beda dengan
-/// ApiException biasa yang artinya server BERHASIL dijawab tapi isinya
-/// error (contoh: password salah). Dipisah supaya AuthNotifier bisa
-/// kasih fallback mock khusus untuk kasus network, bukan untuk kasus
-/// password salah beneran.
 class ApiNetworkException extends ApiException {
   ApiNetworkException(super.message);
 }
 
 class ApiService {
-  /// Login ke API sesuai contoh body di Postman kamu.
-  /// device_id & device_name diambil otomatis dari perangkat,
-  /// tapi kalau gagal deteksi (misalnya di web), fallback ke nilai default.
   Future<LoginResponseModel> login({
     required String username,
     required String password,
@@ -44,16 +35,26 @@ class ApiService {
       'os': deviceInfo['os'],
       'device_id': deviceInfo['device_id'],
       'device_name': deviceInfo['device_name'],
-      'fcm_token': fcmToken ?? '',
+      'fcm_token': (fcmToken == null || fcmToken.isEmpty)
+          ? 'dummy-fcm-token-belum-setup-firebase'
+          : fcmToken,
     };
+
+    debugPrint('[ApiService] LOGIN URL: ${ApiConstants.login}');
+    debugPrint('[ApiService] LOGIN BODY: ${jsonEncode(body)}');
 
     http.Response response;
     try {
       response = await http.post(
         Uri.parse(ApiConstants.login),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': ApiConstants.basicAuthCredential,
+        },
         body: jsonEncode(body),
       );
+      debugPrint('[ApiService] LOGIN STATUS: ${response.statusCode}');
+      debugPrint('[ApiService] LOGIN RESPONSE BODY: ${response.body}');
     } catch (e) {
       // Ini yang biasanya kejadian: CORS diblokir browser (kalau jalan di
       // Flutter web), tidak ada koneksi internet, atau server tidak
@@ -81,7 +82,14 @@ class ApiService {
       return LoginResponseModel.fromJson(decoded);
     }
 
-    final message = decoded['message'] ?? 'Login gagal, silakan coba lagi.';
+    String message;
+    if (decoded['message'] != null) {
+      message = decoded['message'].toString();
+    } else if (decoded['err'] is List && (decoded['err'] as List).isNotEmpty) {
+      message = (decoded['err'] as List).join(', ');
+    } else {
+      message = 'Login gagal, silakan coba lagi.';
+    }
     throw ApiException(message, statusCode: response.statusCode);
   }
 

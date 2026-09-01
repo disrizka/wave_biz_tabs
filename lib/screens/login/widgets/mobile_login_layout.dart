@@ -1,16 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:wave_biz_tabs/core/constants.dart';
+import 'package:wave_biz_tabs/screens/login/widgets/login_form_card.dart';
 
-import '../../../core/constants.dart';
-import 'login_form_card.dart';
-
-/// Layout login untuk HP: background gradasi biru muda -> putih,
-/// kartu form di tengah, logo WAVEUP mengambang di bagian bawah.
-///
-/// PENTING: sebelumnya pakai `Spacer()` di dalam `SingleChildScrollView`,
-/// itu penyebab layar putih blank di HP — `Spacer`/`Expanded` butuh
-/// tinggi yang terbatas (bounded), sedangkan di dalam scroll view
-/// tingginya unbounded, jadi Flutter gagal nge-render frame sama sekali.
-/// Sekarang diganti spacing tetap, jadi aman.
 class MobileLoginLayout extends StatelessWidget {
   const MobileLoginLayout({super.key});
 
@@ -26,23 +17,31 @@ class MobileLoginLayout extends StatelessWidget {
         ),
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 60),
-              const LoginFormCard(),
-              const SizedBox(height: 80),
-              Image.asset(
-                AssetPaths.logo,
-                height: 28,
-                color: Colors.white,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const LoginFormCard(),
+                      const SizedBox(height: 80),
+                      Image.asset(
+                        AssetPaths.logo,
+                        height: 28,
+                        color: Colors.white,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
