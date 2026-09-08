@@ -34,6 +34,7 @@ class ProductModel {
   final String name;
   final List<ProductPriceTier> prices;
   final List<ProductImage> images;
+  final String? categoryName;
 
   ProductModel({
     required this.idProduct,
@@ -41,9 +42,11 @@ class ProductModel {
     required this.name,
     this.prices = const [],
     this.images = const [],
+    this.categoryName,
   });
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
+    final category = json['productCategory'] as Map<String, dynamic>?;
     return ProductModel(
       idProduct: json['idProduct']?.toString() ?? '',
       uuid: json['uuid']?.toString() ?? '',
@@ -54,6 +57,7 @@ class ProductModel {
       images: (json['images'] as List? ?? [])
           .map((e) => ProductImage.fromJson(e))
           .toList(),
+      categoryName: category?['name']?.toString(),
     );
   }
 
@@ -155,6 +159,28 @@ class ProductPosResponse {
       allProducts: data['allProducts'] ?? false,
       categories: categories,
       productsByCategoryName: grouped,
+      page: ProductPageMeta.fromJson(
+        json['page'] as Map<String, dynamic>? ?? {},
+      ),
+    );
+  }
+}
+
+/// Response shape for GET /waveup/{businessId}/product (flat list endpoint).
+/// Unlike /product/pos, this endpoint reliably respects `id_category`.
+class ProductFlatResponse {
+  final List<ProductModel> products;
+  final ProductPageMeta page;
+
+  ProductFlatResponse({required this.products, required this.page});
+
+  factory ProductFlatResponse.fromJson(Map<String, dynamic> json) {
+    final items = (json['data'] as List? ?? [])
+        .map((e) => ProductModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    return ProductFlatResponse(
+      products: items,
       page: ProductPageMeta.fromJson(
         json['page'] as Map<String, dynamic>? ?? {},
       ),

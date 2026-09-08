@@ -147,9 +147,55 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     }
   }
 
-  Future<void> _init() async {
+  /// Fetches products via the reliable /product endpoint and groups them
+  /// by categoryName so it slots into the existing productsByCategoryName
+  /// state shape.
+  Future<({Map<String, List<ProductModel>> grouped, ProductPageMeta page})>
+  _fetchFlatGroupedWithRetry({
+    String? categoryId,
+    String? fallbackCategoryName,
+    int page = 1,
+    int maxRetries = 1,
+  }) async {
+    final token = _accessToken ?? '';
+    final bId = _businessId ?? '';
+
+    var attempt = 0;
+    while (true) {
+      try {
+        final resp = await _service.getProductsFlat(
+          accessToken: token,
+          businessId: bId,
+          categoryId: categoryId,
+          page: page,
+        );
+        final Map<String, List<ProductModel>> grouped = {};
+        for (final p in resp.products) {
+          final key = p.categoryName ?? fallbackCategoryName ?? '';
+          grouped.putIfAbsent(key, () => []).add(p);
+        }
+        return (grouped: grouped, page: resp.page);
+      } on ApiException catch (e) {
+        final is401 = e.statusCode == 401;
+        if (!is401 || attempt >= maxRetries) rethrow;
+        attempt++;
+        debugPrint('[ProductHomeNotifier] Retry request ke-$attempt...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+  }
+
+  Future<void> _init({bool resetState = true}) async {
     final token = _accessToken;
     final bId = _businessId;
+
+    if (resetState) {
+      // Reset to a clean slate first so switching business never shows the
+      // previous business's categories/products while the new data loads.
+      state = const ProductHomeState(isLoading: true);
+    } else {
+      state = state.copyWith(isLoading: true, clearError: true);
+    }
 
     if (token == null || token.isEmpty || bId == null || bId.isEmpty) {
       state = state.copyWith(
@@ -158,8 +204,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       );
       return;
     }
-
-    state = state.copyWith(isLoading: true, clearError: true);
 
     try {
       final resp = await _fetchWithRetry();
@@ -179,22 +223,49 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       }
 
       String? defaultCategoryId;
+      String? defaultCategoryName;
       if (resp.productsByCategoryName.isNotEmpty) {
         final defaultName = resp.productsByCategoryName.keys.first;
         final match = resp.categories.where((c) => c.name == defaultName);
-        if (match.isNotEmpty) defaultCategoryId = match.first.idProductCategory;
+        if (match.isNotEmpty) {
+          defaultCategoryId = match.first.idProductCategory;
+          defaultCategoryName = defaultName;
+        }
       }
       defaultCategoryId ??= resp.categories.isNotEmpty
           ? resp.categories.first.idProductCategory
           : null;
+      defaultCategoryName ??= resp.categories.isNotEmpty
+          ? resp.categories.first.name
+          : null;
+
+      // /product/pos's own grouped products can be stale for non-first
+      // categories, so re-fetch the default category via the reliable
+      // /product (flat) endpoint instead of trusting resp.productsByCategoryName.
+      Map<String, List<ProductModel>> productsByCategoryName =
+          resp.productsByCategoryName;
+      ProductPageMeta pageMeta = resp.page;
+      if (defaultCategoryId != null) {
+        try {
+          final flat = await _fetchFlatGroupedWithRetry(
+            categoryId: defaultCategoryId,
+            fallbackCategoryName: defaultCategoryName,
+          );
+          productsByCategoryName = flat.grouped;
+          pageMeta = flat.page;
+        } catch (_) {
+          // Fall back to whatever /product/pos returned if the flat
+          // endpoint fails, rather than blocking the whole screen.
+        }
+      }
 
       state = state.copyWith(
         isLoading: false,
         allProducts: false,
         categories: resp.categories,
-        productsByCategoryName: resp.productsByCategoryName,
+        productsByCategoryName: productsByCategoryName,
         selectedCategoryId: defaultCategoryId,
-        pageMeta: resp.page,
+        pageMeta: pageMeta,
         backendPage: 1,
         revealCount: kPageRevealBatch,
       );
@@ -204,6 +275,12 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
   }
 
   Future<void> selectCategory(String? categoryId) async {
+    debugPrint(
+      '[ProductProvider] selectCategory called: categoryId=$categoryId, '
+      'state.allProducts=${state.allProducts}, '
+      'state.selectedCategoryId=${state.selectedCategoryId}',
+    );
+
     if (state.allProducts) {
       state = state.copyWith(
         selectedCategoryId: categoryId,
@@ -214,7 +291,12 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       return;
     }
 
-    if (categoryId == null || categoryId == state.selectedCategoryId) return;
+    if (categoryId == null || categoryId == state.selectedCategoryId) {
+      debugPrint(
+        '[ProductProvider] selectCategory early-return (null or unchanged)',
+      );
+      return;
+    }
 
     state = state.copyWith(
       isLoading: true,
@@ -224,13 +306,25 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       revealCount: kPageRevealBatch,
     );
     try {
-      final resp = await _fetchWithRetry(categoryId: categoryId);
+      final fallbackName = state._categoryNameOf(categoryId);
+      final flat = await _fetchFlatGroupedWithRetry(
+        categoryId: categoryId,
+        fallbackCategoryName: fallbackName,
+      );
 
       state = state.copyWith(
         isLoading: false,
-        productsByCategoryName: resp.productsByCategoryName,
-        pageMeta: resp.page,
+        productsByCategoryName: flat.grouped,
+        pageMeta: flat.page,
         backendPage: 1,
+      );
+
+      debugPrint(
+        '[ProductProvider] After update: selectedCategoryId=${state.selectedCategoryId}, '
+        'matchedName=${state._categoryNameOf(state.selectedCategoryId)}, '
+        'productsByCategoryName.keys=${state.productsByCategoryName.keys.toList()}, '
+        'activeFullList.length=${state._activeFullList.length}, '
+        'visibleProducts.length=${state.visibleProducts.length}',
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: '$e');
@@ -254,19 +348,21 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     state = state.copyWith(loadingMore: true);
     try {
       final nextPage = state.backendPage + 1;
-      final resp = await _fetchWithRetry(
+      final fallbackName = state._categoryNameOf(state.selectedCategoryId);
+      final flat = await _fetchFlatGroupedWithRetry(
         categoryId: state.selectedCategoryId,
+        fallbackCategoryName: fallbackName,
         page: nextPage,
       );
 
       final merged = {...state.productsByCategoryName};
-      resp.productsByCategoryName.forEach((name, items) {
+      flat.grouped.forEach((name, items) {
         merged[name] = [...(merged[name] ?? []), ...items];
       });
 
       state = state.copyWith(
         productsByCategoryName: merged,
-        pageMeta: resp.page,
+        pageMeta: flat.page,
         backendPage: nextPage,
         revealCount: state.revealCount + kPageRevealBatch,
         loadingMore: false,
@@ -276,7 +372,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     }
   }
 
-  Future<void> refresh() => _init();
+  Future<void> refresh() => _init(resetState: false);
 }
 
 final productHomeProvider =

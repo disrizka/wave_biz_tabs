@@ -55,6 +55,9 @@ class CartNotifier extends Notifier<CartState> {
   CartState build() {
     ref.listen(authProvider, (previous, next) {
       if (previous?.activeBusinessId != next.activeBusinessId) {
+        // Kosongkan cart dulu supaya UI langsung menunjukkan 0,
+        // baru load data cart milik bisnis yang baru aktif.
+        state = const CartState(items: [], isLoaded: false);
         _load();
       }
     });
