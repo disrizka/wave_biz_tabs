@@ -122,10 +122,6 @@ class AuthNotifier extends Notifier<AuthState> {
       return true;
     } on ApiNetworkException catch (e) {
       debugPrint('[AuthNotifier] Network error saat login: $e');
-      if (AppConstants.enableMockLoginFallback) {
-        await _applySuccessfulLogin(_mockLoginResult());
-        return true;
-      }
       state = state.copyWith(isLoading: false, errorMessage: e.message);
       return false;
     } on ApiException catch (e) {
@@ -163,64 +159,6 @@ class AuthNotifier extends Notifier<AuthState> {
 
   void setActiveBusiness(String idBusiness) {
     state = state.copyWith(activeBusinessId: idBusiness);
-  }
-
-  LoginResponseModel _mockLoginResult() {
-    return LoginResponseModel.fromJson({
-      'status': 200,
-      'data': {
-        'idUser': '2ebc039352c84470d82c1c6d0bf42f29bb34da',
-        'firstname': 'User',
-        'lastname': 'Test',
-        'phone': '',
-        'email': 'user30@mail.com',
-        'photo': '',
-        'photoPath': 'https://wave-cdn.eon.id/static/cdn/no-img.jpg',
-        'isDeactivated': false,
-        'username': 'u1787547142',
-        'hasPage': false,
-        'userRoleName': 'Owner',
-        'roleId': '77850d4cb833de1a41934982a36c5c6c066f6e',
-      },
-      'business': [
-        {
-          'idBusiness': '46e96364c42e6f3132525e75813ea514c8cded',
-          'name': 'Burger Restaurant',
-          'logo': '26/08/Icon-Background-Gradient-1787547236.png',
-          'logoPath':
-              'https://wave-cdn.eon.id/static/business/logo/26/08/Icon-Background-Gradient-1787547236.png',
-          'username': 'burger_restaurant',
-          'about': '',
-          'canBeSoldOutOfStock': true,
-          'userRoleName': 'Owner',
-          'roleId': 'ba14afeeddc29018bd2ec8baafb0effb9294bc',
-          'isPremium': true,
-          'premiumStartAt': '2026-08-21T19:46:51+07:00',
-          'premiumExpiresAt': '2026-12-21T19:46:51+07:00',
-          'banned': null,
-        },
-        {
-          'idBusiness': 'f9e4ed4f9c121b3186c5690995bce54a91edce',
-          'name': 'Popular Stationery',
-          'logo': '26/08/eade_logo-1787547316.png',
-          'logoPath':
-              'https://wave-cdn.eon.id/static/business/logo/26/08/eade_logo-1787547316.png',
-          'username': 'popular_st',
-          'about': '',
-          'canBeSoldOutOfStock': true,
-          'userRoleName': 'Owner',
-          'roleId': 'b718fdfdc4e37c71a88a67626596d0c3738fe5',
-          'isPremium': false,
-          'premiumStartAt': null,
-          'premiumExpiresAt': null,
-          'banned': null,
-        },
-      ],
-      'token': {
-        'access_token': 'mock-access-token-untuk-testing-ui',
-        'refresh_token': 'mock-refresh-token-untuk-testing-ui',
-      },
-    });
   }
 
   void _scheduleRefresh({required Duration remaining}) {

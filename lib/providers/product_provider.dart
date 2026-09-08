@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/models/product_model.dart';
 import 'package:wave_biz_tabs/providers/auth_provider.dart';
+import 'package:wave_biz_tabs/services/api_service.dart';
 import 'package:wave_biz_tabs/services/product_service.dart';
 
 const int kPageRevealBatch = 20;
@@ -100,26 +102,67 @@ class ProductHomeState {
 }
 
 class ProductHomeNotifier extends Notifier<ProductHomeState> {
-  ProductHomeNotifier(this.businessId);
-
-  final String businessId;
   final ProductService _service = ProductService();
 
   @override
   ProductHomeState build() {
+    ref.listen(authProvider, (previous, next) {
+      if (previous?.activeBusinessId != next.activeBusinessId ||
+          previous?.accessToken != next.accessToken) {
+        _init();
+      }
+    });
+
     Future.microtask(_init);
     return const ProductHomeState();
   }
 
   String? get _accessToken => ref.read(authProvider).accessToken;
+  String? get _businessId => ref.read(authProvider).activeBusinessId;
+
+  Future<ProductPosResponse> _fetchWithRetry({
+    String? categoryId,
+    int page = 1,
+    int maxRetries = 1,
+  }) async {
+    final token = _accessToken ?? '';
+    final bId = _businessId ?? '';
+
+    var attempt = 0;
+    while (true) {
+      try {
+        return await _service.getProducts(
+          accessToken: token,
+          businessId: bId,
+          categoryId: categoryId,
+          page: page,
+        );
+      } on ApiException catch (e) {
+        final is401 = e.statusCode == 401;
+        if (!is401 || attempt >= maxRetries) rethrow;
+        attempt++;
+        debugPrint('[ProductHomeNotifier] Retry request ke-$attempt...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+  }
 
   Future<void> _init() async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final resp = await _service.getProducts(
-        accessToken: _accessToken ?? '',
-        businessId: businessId,
+    final token = _accessToken;
+    final bId = _businessId;
+
+    if (token == null || token.isEmpty || bId == null || bId.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Sesi login atau bisnis aktif belum tersedia.',
       );
+      return;
+    }
+
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final resp = await _fetchWithRetry();
 
       if (resp.allProducts) {
         state = state.copyWith(
@@ -181,11 +224,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       revealCount: kPageRevealBatch,
     );
     try {
-      final resp = await _service.getProducts(
-        accessToken: _accessToken ?? '',
-        businessId: businessId,
-        categoryId: categoryId,
-      );
+      final resp = await _fetchWithRetry(categoryId: categoryId);
 
       state = state.copyWith(
         isLoading: false,
@@ -215,9 +254,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     state = state.copyWith(loadingMore: true);
     try {
       final nextPage = state.backendPage + 1;
-      final resp = await _service.getProducts(
-        accessToken: _accessToken ?? '',
-        businessId: businessId,
+      final resp = await _fetchWithRetry(
         categoryId: state.selectedCategoryId,
         page: nextPage,
       );
@@ -243,6 +280,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
 }
 
 final productHomeProvider =
-    NotifierProvider.family<ProductHomeNotifier, ProductHomeState, String>(
-      (businessId) => ProductHomeNotifier(businessId),
+    NotifierProvider<ProductHomeNotifier, ProductHomeState>(
+      ProductHomeNotifier.new,
     );

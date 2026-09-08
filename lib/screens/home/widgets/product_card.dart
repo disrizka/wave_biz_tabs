@@ -7,6 +7,50 @@ class ProductCard extends StatelessWidget {
 
   const ProductCard({super.key, required this.product, this.onAdd});
 
+  Widget _buildProductImage() {
+    if (product.photoPath.isNotEmpty) {
+      return Image.network(
+        product.photoPath,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: const Color(0xFFF4F5F9),
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint(
+            '[ProductCard] Gagal memuat gambar: ${product.photoPath} | Error: $error',
+          );
+          return Container(
+            color: Colors.grey.shade100,
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.grey.shade400,
+              size: 36,
+            ),
+          );
+        },
+      );
+    }
+
+    return Container(
+      color: const Color(0xFFF4F5F9),
+      child: Icon(
+        Icons.fastfood_outlined,
+        color: Colors.grey.shade400,
+        size: 36,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -27,17 +71,7 @@ class ProductCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              AspectRatio(
-                aspectRatio: 1.3,
-                child: Image.network(
-                  product.photoPath,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade100,
-                    child: const Icon(Icons.fastfood, color: Colors.grey),
-                  ),
-                ),
-              ),
+              AspectRatio(aspectRatio: 1.3, child: _buildProductImage()),
               if (product.isOutOfStock)
                 Positioned(
                   top: 8,

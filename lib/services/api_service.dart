@@ -56,9 +56,6 @@ class ApiService {
       debugPrint('[ApiService] LOGIN STATUS: ${response.statusCode}');
       debugPrint('[ApiService] LOGIN RESPONSE BODY: ${response.body}');
     } catch (e) {
-      // Ini yang biasanya kejadian: CORS diblokir browser (kalau jalan di
-      // Flutter web), tidak ada koneksi internet, atau server tidak
-      // bisa dijangkau sama sekali. Bukan salah username/password.
       throw ApiNetworkException(
         'Gagal terhubung ke server. Kalau kamu run di web/Chrome, '
         'kemungkinan besar ini diblokir CORS oleh browser — coba run di '
@@ -93,16 +90,6 @@ class ApiService {
     throw ApiException(message, statusCode: response.statusCode);
   }
 
-  /// Refresh access token.
-  /// Endpoint: GET /user/refresh-token (dikonfirmasi dari Postman kamu).
-  /// Header yang dipakai:
-  ///   - Content-Type: application/json
-  ///   - Authorization: Basic <credential tetap app> (lihat ApiConstants.basicAuthCredential)
-  ///   - Refresh-Token: <refresh_token user, TANPA prefix "Bearer">
-  ///
-  /// Response API cuma balikin access_token baru (bukan refresh_token baru):
-  /// { "access_token": "...", "status": 200 }
-  /// Jadi refresh_token lama tetap dipakai terus sampai dia sendiri expired.
   Future<String> refreshToken(String refreshToken) async {
     http.Response response;
     try {
@@ -154,9 +141,7 @@ class ApiService {
           'device_name': info.utsname.machine,
         };
       }
-    } catch (_) {
-      // Fallback kalau device_info gagal diakses (misalnya di web/desktop)
-    }
+    } catch (_) {}
     return {
       'os': defaultTargetPlatform.name,
       'device_id': 'web-or-desktop-device',

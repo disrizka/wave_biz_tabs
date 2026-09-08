@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/auth_provider.dart';
 
-/// Kartu form login: "Get started!", input username, password, forgot password,
-/// dan tombol Login. Dipakai baik di layout mobile maupun tablet/web,
-/// cuma beda pembungkus di luarnya aja.
 class LoginFormCard extends ConsumerStatefulWidget {
   const LoginFormCard({super.key});
 
@@ -141,7 +138,7 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 onPressed: () {
-                  // TODO: arahkan ke flow forgot password
+                
                 },
                 child: const Text(
                   'Forgot passsword?',

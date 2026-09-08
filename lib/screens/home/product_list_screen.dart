@@ -6,9 +6,9 @@ import 'package:wave_biz_tabs/screens/home/widgets/category_chip_row.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/product_card.dart';
 
 class ProductListScreen extends ConsumerStatefulWidget {
-  final String businessId;
+  final String? businessId;
 
-  const ProductListScreen({super.key, required this.businessId});
+  const ProductListScreen({super.key, this.businessId});
 
   @override
   ConsumerState<ProductListScreen> createState() => _ProductListScreenState();
@@ -35,7 +35,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     if (!_scrollController.hasClients) return;
     final threshold = _scrollController.position.maxScrollExtent - 300;
     if (_scrollController.position.pixels >= threshold) {
-      ref.read(productHomeProvider(widget.businessId).notifier).loadMore();
+      ref.read(productHomeProvider.notifier).loadMore();
     }
   }
 
@@ -48,9 +48,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   Widget _searchField(ProductHomeState state) {
     return TextField(
       controller: _searchController,
-      onChanged: ref
-          .read(productHomeProvider(widget.businessId).notifier)
-          .search,
+      onChanged: ref.read(productHomeProvider.notifier).search,
       style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
       decoration: InputDecoration(
         hintText: state.allProducts
@@ -76,8 +74,8 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(productHomeProvider(widget.businessId));
-    final notifier = ref.read(productHomeProvider(widget.businessId).notifier);
+    final state = ref.watch(productHomeProvider);
+    final notifier = ref.read(productHomeProvider.notifier);
     final columns = _gridColumns(context);
     final products = state.visibleProducts;
     final isMobile = Responsive.isMobile(context);
@@ -98,7 +96,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (isMobile) ...[
-                            // Mobile (figma): search dulu di atas, chip di bawahnya.
                             _searchField(state),
                             if (state.categories.isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -134,7 +131,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             ),
                           ],
                           if (!state.allProducts && !state.isSearching)
-                            Padding(padding: const EdgeInsets.only(top: 8)),
+                            const Padding(padding: EdgeInsets.only(top: 8)),
                         ],
                       ),
                     ),
