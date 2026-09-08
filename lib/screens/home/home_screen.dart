@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/models/business_model.dart';
 import 'package:wave_biz_tabs/providers/auth_provider.dart';
+import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/order_summary_panel.dart';
 import 'product_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -15,14 +17,17 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _tabIndex = 0;
 
-  static const _tabs = [
-    _NavItem(icon: Icons.note_add_rounded, label: 'Produk'),
+  List<_NavItem> _tabs(bool cartHasItems) => [
+    const _NavItem(icon: Icons.note_add_rounded, label: 'Produk'),
     _NavItem(
       icon: Icons.receipt_long_outlined,
       label: 'Pesanan',
-      hasBadge: true,
+      hasBadge: cartHasItems,
     ),
-    _NavItem(icon: Icons.account_balance_wallet_outlined, label: 'Transaksi'),
+    const _NavItem(
+      icon: Icons.account_balance_wallet_outlined,
+      label: 'Transaksi',
+    ),
   ];
 
   void _openSwitcher(
@@ -87,6 +92,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final activeBusiness = authState.activeBusiness;
+    final cartState = ref.watch(cartProvider);
+    final tabs = _tabs(!cartState.isEmpty);
 
     if (activeBusiness == null) {
       return Scaffold(
@@ -107,7 +114,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           key: ValueKey(activeBusiness.idBusiness),
           businessId: activeBusiness.idBusiness,
         ),
-        const _ComingSoonScreen(title: 'Pesanan'),
+        const OrderSummaryPanel(),
         const _ComingSoonScreen(title: 'Transaksi'),
       ],
     );
@@ -123,7 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _SideRail(
-                  tabs: _tabs,
+                  tabs: tabs,
                   selectedIndex: _tabIndex,
                   onSelectTab: (i) => setState(() => _tabIndex = i),
                   onTapLogo: () => _openSwitcher(
@@ -150,7 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return Scaffold(
           body: SafeArea(child: page),
           bottomNavigationBar: _BottomNav(
-            tabs: _tabs,
+            tabs: tabs,
             selectedIndex: _tabIndex,
             onSelectTab: (i) => setState(() => _tabIndex = i),
             onTapProfile: () =>

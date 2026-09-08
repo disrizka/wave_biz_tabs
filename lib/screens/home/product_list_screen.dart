@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/responsive.dart';
 import 'package:wave_biz_tabs/providers/product_provider.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/categorized_product_list.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/category_chip_row.dart';
-import 'package:wave_biz_tabs/screens/home/widgets/product_card.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/cart_connected_product_card.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/order_summary_panel.dart';
 
 class ProductListScreen extends ConsumerStatefulWidget {
   final String? businessId;
@@ -77,133 +79,193 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     final state = ref.watch(productHomeProvider);
     final notifier = ref.read(productHomeProvider.notifier);
     final columns = _gridColumns(context);
-    final products = state.visibleProducts;
-    final isMobile = Responsive.isMobile(context);
+    final isDesktop = Responsive.isDesktop(context);
+
+    final content = _buildContent(
+      context: context,
+      state: state,
+      notifier: notifier,
+      columns: columns,
+    );
+
+    if (!isDesktop) {
+      return Scaffold(backgroundColor: Colors.white, body: content);
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: RefreshIndicator(
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: content),
+          Container(
+            width: 340,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: const OrderSummaryPanel(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Uses the sticky per-category list (GoFood style) for catalogs under
+  /// ~200 products (state.allProducts == true) when not searching, and the
+  /// existing paginated flat grid + category dropdown otherwise.
+  Widget _buildContent({
+    required BuildContext context,
+    required ProductHomeState state,
+    required ProductHomeNotifier notifier,
+    required int columns,
+  }) {
+    if (state.error != null) {
+      return RefreshIndicator(
         onRefresh: notifier.refresh,
-        child: state.error != null
-            ? _ErrorView(message: state.error!, onRetry: notifier.refresh)
-            : CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    sliver: SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (isMobile) ...[
-                            _searchField(state),
-                            if (state.categories.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              CategoryChipRow(
-                                categories: state.categories,
-                                selectedCategoryId: state.selectedCategoryId,
-                                showAllChip: state.allProducts,
-                                onSelect: notifier.selectCategory,
-                              ),
-                            ],
-                          ] else ...[
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                if (state.categories.isNotEmpty)
-                                  Expanded(
-                                    child: CategoryChipRow(
-                                      categories: state.categories,
-                                      selectedCategoryId:
-                                          state.selectedCategoryId,
-                                      showAllChip: state.allProducts,
-                                      onSelect: notifier.selectCategory,
-                                    ),
-                                  )
-                                else
-                                  const Spacer(),
-                                const SizedBox(width: 16),
-                                SizedBox(
-                                  width: 300,
-                                  child: _searchField(state),
-                                ),
-                              ],
+        child: ListView(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: _ErrorView(
+                message: state.error!,
+                onRetry: notifier.refresh,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final useCategorizedView = state.allProducts && !state.isSearching;
+
+    if (useCategorizedView) {
+      return RefreshIndicator(
+        onRefresh: notifier.refresh,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _searchField(state),
+              const SizedBox(height: 12),
+              Expanded(
+                child: state.isLoading && state.productsByCategoryName.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : CategorizedProductList(
+                        productsByCategoryName: state.productsByCategoryName,
+                        columns: columns,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Backend-paginated flat grid (200+ products) or active search results.
+    final products = state.visibleProducts;
+    final isMobile = Responsive.isMobile(context);
+
+    return RefreshIndicator(
+      onRefresh: notifier.refresh,
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (isMobile) ...[
+                    _searchField(state),
+                    if (!state.allProducts && state.categories.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      CategoryChipRow(
+                        categories: state.categories,
+                        selectedCategoryId: state.selectedCategoryId,
+                        showAllChip: state.allProducts,
+                        onSelect: notifier.selectCategory,
+                      ),
+                    ],
+                  ] else ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        if (!state.allProducts && state.categories.isNotEmpty)
+                          Expanded(
+                            child: CategoryChipRow(
+                              categories: state.categories,
+                              selectedCategoryId: state.selectedCategoryId,
+                              showAllChip: state.allProducts,
+                              onSelect: notifier.selectCategory,
                             ),
-                          ],
-                          if (!state.allProducts && !state.isSearching)
-                            const Padding(padding: EdgeInsets.only(top: 8)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (state.isLoading && products.isEmpty)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (products.isEmpty)
-                    SliverFillRemaining(
-                      child: Center(
-                        child: Text(
-                          state.isSearching
-                              ? 'Produk tidak ditemukan'
-                              : 'Belum ada produk',
-                          style: TextStyle(color: Colors.grey.shade500),
-                        ),
-                      ),
-                    )
-                  else ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.68,
-                        ),
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          final p = products[index];
-                          return ProductCard(
-                            product: p,
-                            onAdd: () {
-                              ScaffoldMessenger.of(context)
-                                ..hideCurrentSnackBar()
-                                ..showSnackBar(
-                                  SnackBar(
-                                    content: Text('${p.name} ditambahkan'),
-                                    duration: const Duration(seconds: 1),
-                                  ),
-                                );
-                            },
-                          );
-                        }, childCount: products.length),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Center(
-                          child: state.loadingMore
-                              ? const CircularProgressIndicator()
-                              : (state.canRevealMoreLocally ||
-                                    state.canFetchMoreFromBackend)
-                              ? TextButton(
-                                  onPressed: notifier.loadMore,
-                                  child: const Text('Muat Lebih Banyak'),
-                                )
-                              : Text(
-                                  'Semua produk sudah ditampilkan',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                        ),
-                      ),
+                          )
+                        else
+                          const Spacer(),
+                        const SizedBox(width: 16),
+                        SizedBox(width: 300, child: _searchField(state)),
+                      ],
                     ),
                   ],
                 ],
               ),
+            ),
+          ),
+          if (state.isLoading && products.isEmpty)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (products.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Text(
+                  state.isSearching
+                      ? 'Produk tidak ditemukan'
+                      : 'Belum ada produk',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
+              ),
+            )
+          else ...[
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.62,
+                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return CartConnectedProductCard(product: products[index]);
+                }, childCount: products.length),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: state.loadingMore
+                      ? const CircularProgressIndicator()
+                      : (state.canRevealMoreLocally ||
+                            state.canFetchMoreFromBackend)
+                      ? TextButton(
+                          onPressed: notifier.loadMore,
+                          child: const Text('Muat Lebih Banyak'),
+                        )
+                      : Text(
+                          'Semua produk sudah ditampilkan',
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

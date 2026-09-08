@@ -4,8 +4,20 @@ import 'package:wave_biz_tabs/models/product_model.dart';
 class ProductCard extends StatelessWidget {
   final ProductModel product;
   final VoidCallback? onAdd;
+  final int quantity;
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
+  final VoidCallback? onRemove;
 
-  const ProductCard({super.key, required this.product, this.onAdd});
+  const ProductCard({
+    super.key,
+    required this.product,
+    this.onAdd,
+    this.quantity = 0,
+    this.onIncrement,
+    this.onDecrement,
+    this.onRemove,
+  });
 
   Widget _buildProductImage() {
     if (product.photoPath.isNotEmpty) {
@@ -98,9 +110,10 @@ class ProductCard extends StatelessWidget {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   product.name,
@@ -108,50 +121,138 @@ class ProductCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
-                    fontSize: 13.5,
+                    fontSize: 13,
                     color: Color(0xFF1F2430),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   product.isOutOfStock ? '-' : product.formattedPrice,
                   style: const TextStyle(
                     color: Color(0xFF3B5FE0),
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    fontSize: 12.5,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
-                  height: 36,
-                  child: ElevatedButton.icon(
-                    onPressed: product.isOutOfStock ? null : onAdd,
-                    icon: const Icon(Icons.add_shopping_cart, size: 15),
-                    label: const Text(
-                      'Add Product',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B5FE0),
-                      disabledBackgroundColor: Colors.grey.shade200,
-                      disabledForegroundColor: Colors.grey.shade500,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
+                  height: 32,
+                  child: quantity > 0
+                      ? _QuantityStepper(
+                          quantity: quantity,
+                          onIncrement: onIncrement,
+                          onDecrement: onDecrement,
+                          onRemove: onRemove,
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: product.isOutOfStock ? null : onAdd,
+                          icon: const Icon(Icons.add_shopping_cart, size: 15),
+                          label: const Text(
+                            'Add Product',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B5FE0),
+                            disabledBackgroundColor: Colors.grey.shade200,
+                            disabledForegroundColor: Colors.grey.shade500,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _QuantityStepper extends StatelessWidget {
+  final int quantity;
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
+  final VoidCallback? onRemove;
+
+  const _QuantityStepper({
+    required this.quantity,
+    this.onIncrement,
+    this.onDecrement,
+    this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF1FD),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          _StepperButton(
+            icon: Icons.remove,
+            onTap: onDecrement,
+            color: const Color(0xFF3B5FE0),
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                '$quantity',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5,
+                  color: Color(0xFF1F2430),
+                ),
+              ),
+            ),
+          ),
+          _StepperButton(
+            icon: Icons.add,
+            onTap: onIncrement,
+            color: const Color(0xFF3B5FE0),
+          ),
+          Container(width: 1, height: 20, color: const Color(0xFFDCE2FA)),
+          _StepperButton(
+            icon: Icons.delete_outline,
+            onTap: onRemove,
+            color: Colors.redAccent,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color color;
+
+  const _StepperButton({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 32,
+        height: 32,
+        child: Icon(icon, size: 15, color: color),
       ),
     );
   }
