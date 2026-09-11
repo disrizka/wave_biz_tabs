@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/snackbar_utils.dart';
 import 'package:wave_biz_tabs/models/cart_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
+import 'package:wave_biz_tabs/widgets/payment_method_sheet.dart';
 
 class OrderSummaryPanel extends ConsumerStatefulWidget {
   const OrderSummaryPanel({super.key});
@@ -218,7 +219,9 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
             width: double.infinity,
             height: 46,
             child: ElevatedButton.icon(
-              onPressed: isEmpty ? null : () {},
+              onPressed: isEmpty
+                  ? null
+                  : () => showPaymentMethodSheet(context, ref),
               icon: const Icon(Icons.credit_card, size: 18),
               label: const Text(
                 'Continue Payment',

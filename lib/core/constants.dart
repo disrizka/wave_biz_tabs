@@ -25,3 +25,13 @@ class AssetPaths {
   static const String logo = 'assets/images/logo.png';
   static const String illustration = 'assets/images/login/ilustrasi.png';
 }
+
+/// TODO: Belum ada layar pemilihan store location & customer di app ini.
+/// Nilai di bawah ini contoh dari Postman kamu, dipakai sementara supaya
+/// alur payment bisa langsung dicoba. Ganti dengan ID yang sebenarnya
+/// (idealnya diambil dari provider store/customer begitu fitur itu dibuat).
+class TransactionConstants {
+  static const String defaultStoreLocationId =
+      'eb6791f248bc8b80348cdb7ec7dd858c71';
+  static const String defaultCustomerId = 'c09136813e7f206e2a13f76a7d5047e680';
+}
