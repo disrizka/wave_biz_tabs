@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/snackbar_utils.dart';
 import 'package:wave_biz_tabs/models/cart_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
+import 'package:wave_biz_tabs/providers/draft_provider.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/draft_history_sheet.dart';
 import 'package:wave_biz_tabs/widgets/payment_method_sheet.dart';
+
+const _kAccent = Color(0xFF3B5FE0);
 
 class OrderSummaryPanel extends ConsumerStatefulWidget {
   const OrderSummaryPanel({super.key});
@@ -87,11 +91,33 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
     }
   }
 
+  Future<void> _saveDraft(BuildContext context) async {
+    final cart = ref.read(cartProvider);
+    if (cart.isEmpty) return;
+
+    await ref
+        .read(draftProvider.notifier)
+        .saveDraft(items: cart.items, orderType: cart.orderType);
+    ref.read(cartProvider.notifier).clear();
+
+    setState(() => _editingNoteFor = null);
+    _noteControllers.clear();
+
+    if (!context.mounted) return;
+    showCartSnackBar(
+      context,
+      message: 'Pesanan disimpan sebagai draft',
+      icon: Icons.bookmark_added_rounded,
+      color: _kAccent,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final notifier = ref.read(cartProvider.notifier);
     final isEmpty = cart.isEmpty;
+    final draftCount = ref.watch(draftProvider).length;
 
     return Container(
       color: Colors.white,
@@ -104,13 +130,32 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
             onChanged: notifier.setOrderType,
           ),
           const SizedBox(height: 18),
-          const Text(
-            'Order summary',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1F2430),
-            ),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Order summary',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2430),
+                  ),
+                ),
+              ),
+              _HeaderIconButton(
+                icon: Icons.bookmark_add_outlined,
+                tooltip: 'Simpan draft',
+                enabled: !isEmpty,
+                onTap: () => _saveDraft(context),
+              ),
+              const SizedBox(width: 6),
+              _HeaderIconButton(
+                icon: Icons.history_rounded,
+                tooltip: 'Riwayat draft',
+                badgeCount: draftCount,
+                onTap: () => showDraftHistorySheet(context, ref),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Expanded(
@@ -240,6 +285,77 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small square icon button used in the Order Summary header for
+/// "Save draft" and "Draft history", with an optional red count badge.
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool enabled;
+  final int? badgeCount;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.enabled = true,
+    this.badgeCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? _kAccent : Colors.grey.shade300;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: enabled ? const Color(0xFFEEF1FD) : const Color(0xFFF4F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(child: Icon(icon, size: 17, color: color)),
+              if (badgeCount != null && badgeCount! > 0)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 1,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white, width: 1.4),
+                    ),
+                    child: Text(
+                      '$badgeCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

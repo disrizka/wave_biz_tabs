@@ -161,6 +161,13 @@ class CartNotifier extends Notifier<CartState> {
     state = state.copyWith(items: []);
     _persistItems();
   }
+
+  /// Replaces the current cart with items restored from a saved draft.
+  void restore({required List<CartItem> items, required OrderType orderType}) {
+    state = state.copyWith(items: items, orderType: orderType);
+    _persistItems();
+    _persistOrderType();
+  }
 }
 
 final cartProvider = NotifierProvider<CartNotifier, CartState>(
