@@ -100,30 +100,39 @@ class _BusinessSwitcherContent extends StatelessWidget {
     );
 
     final title = Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 12, 14),
+      padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Pilih Bisnis',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 19,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pilih Bisnis',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 19,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                'Beralih ke bisnis lain yang kamu kelola',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
+              ),
+            ],
+          ),
+          InkWell(
+            onTap: () => Navigator.of(context).pop(),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.close, size: 17, color: Colors.grey.shade700),
             ),
           ),
-          if (isTablet)
-            InkWell(
-              onTap: () => Navigator.of(context).pop(),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.close, size: 18, color: Colors.grey.shade700),
-              ),
-            ),
         ],
       ),
     );

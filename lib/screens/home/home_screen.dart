@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wave_biz_tabs/models/business_model.dart';
 import 'package:wave_biz_tabs/providers/auth_provider.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
-import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/order_summary_panel.dart';
+import 'package:wave_biz_tabs/screens/profile/profile_screen.dart';
 import 'product_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -30,55 +29,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ),
   ];
 
-  void _openSwitcher(
-    BusinessModel active,
-    List<BusinessModel> list, {
-    bool showLogout = true,
-  }) {
-    if (list.length <= 1 && !showLogout) return;
-    showBusinessSwitcher(
+  void _openProfile() {
+    Navigator.of(
       context,
-      businessList: list,
-      activeBusinessId: active.idBusiness,
-      onSelected: (b) =>
-          ref.read(authProvider.notifier).setActiveBusiness(b.idBusiness),
-      onLogout: _confirmLogout,
-      showLogout: showLogout,
-    );
-  }
-
-  void _handleMobileProfileTap(BusinessModel active, List<BusinessModel> list) {
-    if (list.length <= 1) {
-      _confirmLogout();
-    } else {
-      _openSwitcher(active, list, showLogout: true);
-    }
-  }
-
-  Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Keluar dari akun?'),
-        content: const Text('Kamu perlu login lagi untuk masuk ke akun ini.'),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await _logout();
-    }
+    ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
   }
 
   Future<void> _logout() async {
@@ -133,12 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   tabs: tabs,
                   selectedIndex: _tabIndex,
                   onSelectTab: (i) => setState(() => _tabIndex = i),
-                  onTapLogo: () => _openSwitcher(
-                    activeBusiness,
-                    authState.businessList,
-                    showLogout: false,
-                  ),
-                  onTapProfile: _confirmLogout,
+                  onTapProfile: _openProfile,
                 ),
                 Expanded(
                   child: ClipRRect(
@@ -160,8 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tabs: tabs,
             selectedIndex: _tabIndex,
             onSelectTab: (i) => setState(() => _tabIndex = i),
-            onTapProfile: () =>
-                _handleMobileProfileTap(activeBusiness, authState.businessList),
+            onTapProfile: _openProfile,
           ),
         );
       },
@@ -185,14 +133,12 @@ class _SideRail extends StatelessWidget {
     required this.tabs,
     required this.selectedIndex,
     required this.onSelectTab,
-    required this.onTapLogo,
     required this.onTapProfile,
   });
 
   final List<_NavItem> tabs;
   final int selectedIndex;
   final ValueChanged<int> onSelectTab;
-  final VoidCallback onTapLogo;
   final VoidCallback onTapProfile;
 
   @override
@@ -214,31 +160,26 @@ class _SideRail extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Tooltip(
-            message: 'Pilih bisnis',
-            child: InkWell(
-              onTap: onTapLogo,
+          // Logo bisnis - sengaja tidak bisa dipencet. Ganti bisnis dan
+          // keluar akun sekarang dilakukan lewat halaman Profile.
+          Container(
+            width: 46,
+            height: 46,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF1FD),
               borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: 46,
-                height: 46,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF1FD),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFDCE2FA)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(13),
-                  child: Image.asset(
-                    'assets/images/icon.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.storefront,
-                      size: 20,
-                      color: Color(0xFF3B5FE0),
-                    ),
-                  ),
+              border: Border.all(color: const Color(0xFFDCE2FA)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(13),
+              child: Image.asset(
+                'assets/images/icon.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.storefront,
+                  size: 20,
+                  color: Color(0xFF3B5FE0),
                 ),
               ),
             ),
@@ -262,7 +203,7 @@ class _SideRail extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Tooltip(
-            message: 'Keluar',
+            message: 'Profile',
             child: _RailIcon(
               icon: Icons.person_outline,
               selected: false,
