@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/checkout_provider.dart';
 import '../../models/sale_request.dart';
 
-const _kAccent = Color(0xFF3B5FE0);
+const _kAccent = Color(0xFF008080);
 
 /// Panggil dari tombol "Continue Payment":
 /// ```dart
@@ -223,7 +223,7 @@ class _PaymentOptionCard extends ConsumerWidget {
         duration: const Duration(milliseconds: 150),
         height: 96,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFEEF1FD) : Colors.grey.shade50,
+          color: isSelected ? const Color(0xFFE0F2F1) : Colors.grey.shade50,
           border: Border.all(
             color: isSelected ? _kAccent : Colors.grey.shade200,
             width: isSelected ? 2 : 1,

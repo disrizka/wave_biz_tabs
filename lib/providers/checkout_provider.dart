@@ -106,9 +106,9 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
           .map(
             (item) => SaleItem(
               productId: item.productId,
-              // TODO: ganti kalau product/CartItem sudah punya field SKU
-              // terpisah dari productId.
-              productSkuId: item.productId,
+              // Real SKU id when the product has variants; falls back to
+              // the product id for simple (non-variant) products.
+              productSkuId: item.skuId.isNotEmpty ? item.skuId : item.productId,
               qty: item.quantity,
               price: item.unitPrice,
             ),

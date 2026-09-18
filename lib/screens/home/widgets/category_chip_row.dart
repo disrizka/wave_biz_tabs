@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:wave_biz_tabs/models/product_model.dart';
 
-const _kBrandBlue = Color(0xFF3B5FE0);
+const _kBrandBlue = Color(0xFF008080);
 
 class CategoryChipRow extends StatefulWidget {
   const CategoryChipRow({

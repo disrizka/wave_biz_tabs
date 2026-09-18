@@ -22,11 +22,12 @@ class CartState {
   String get formattedTotal => formatIDR(totalAmount);
   bool get isEmpty => items.isEmpty;
 
+  /// Total quantity across every cart line for this product, regardless of
+  /// which variant/SKU was picked for each line.
   int quantityOf(String productId) {
-    for (final item in items) {
-      if (item.productId == productId) return item.quantity;
-    }
-    return 0;
+    return items
+        .where((i) => i.productId == productId)
+        .fold(0, (sum, i) => sum + i.quantity);
   }
 
   CartState copyWith({
@@ -105,31 +106,37 @@ class CartNotifier extends Notifier<CartState> {
     _persistOrderType();
   }
 
-  void addProduct(ProductModel product) {
-    final id = product.idProduct.isNotEmpty ? product.idProduct : product.uuid;
+  /// Adds [product] to the cart. Pass [sku] for products that require a
+  /// variant selection (`product.hasVariants`) — the matching cart line is
+  /// found via the product+SKU combination, not the product alone, so
+  /// picking a different variant always creates its own line.
+  void addProduct(ProductModel product, {ProductSku? sku, int quantity = 1}) {
+    final newItem = CartItem.fromProduct(product, sku: sku, quantity: quantity);
     final items = [...state.items];
-    final index = items.indexWhere((i) => i.productId == id);
+    final index = items.indexWhere((i) => i.cartLineId == newItem.cartLineId);
     if (index == -1) {
-      items.add(CartItem.fromProduct(product, quantity: 1));
+      items.add(newItem);
     } else {
-      items[index] = items[index].copyWith(quantity: items[index].quantity + 1);
+      items[index] = items[index].copyWith(
+        quantity: items[index].quantity + quantity,
+      );
     }
     state = state.copyWith(items: items);
     _persistItems();
   }
 
-  void increment(String productId) {
+  void increment(String cartLineId) {
     final items = [...state.items];
-    final index = items.indexWhere((i) => i.productId == productId);
+    final index = items.indexWhere((i) => i.cartLineId == cartLineId);
     if (index == -1) return;
     items[index] = items[index].copyWith(quantity: items[index].quantity + 1);
     state = state.copyWith(items: items);
     _persistItems();
   }
 
-  void decrement(String productId) {
+  void decrement(String cartLineId) {
     final items = [...state.items];
-    final index = items.indexWhere((i) => i.productId == productId);
+    final index = items.indexWhere((i) => i.cartLineId == cartLineId);
     if (index == -1) return;
     final newQty = items[index].quantity - 1;
     if (newQty <= 0) {
@@ -141,16 +148,16 @@ class CartNotifier extends Notifier<CartState> {
     _persistItems();
   }
 
-  void removeItem(String productId) {
+  void removeItem(String cartLineId) {
     final items = [...state.items]
-      ..removeWhere((i) => i.productId == productId);
+      ..removeWhere((i) => i.cartLineId == cartLineId);
     state = state.copyWith(items: items);
     _persistItems();
   }
 
-  void setNote(String productId, String note) {
+  void setNote(String cartLineId, String note) {
     final items = [...state.items];
-    final index = items.indexWhere((i) => i.productId == productId);
+    final index = items.indexWhere((i) => i.cartLineId == cartLineId);
     if (index == -1) return;
     items[index] = items[index].copyWith(note: note);
     state = state.copyWith(items: items);

@@ -30,8 +30,8 @@ class WaveUpApp extends StatelessWidget {
       title: 'WAVEUP',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF3E5FCE),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3E5FCE)),
+        primaryColor: const Color(0xFF008080),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF008080)),
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),

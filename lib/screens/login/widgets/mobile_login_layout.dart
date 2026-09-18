@@ -12,7 +12,7 @@ class MobileLoginLayout extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFE4E9FB), Colors.white, Color(0xFFBFD8FA)],
+          colors: [Color(0xFFE0F2F1), Colors.white, Color(0xFFB2DFDB)],
           stops: [0.0, 0.45, 1.0],
         ),
       ),

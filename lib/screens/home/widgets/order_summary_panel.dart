@@ -7,7 +7,7 @@ import 'package:wave_biz_tabs/providers/draft_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/draft_history_sheet.dart';
 import 'package:wave_biz_tabs/widgets/payment_method_sheet.dart';
 
-const _kAccent = Color(0xFF3B5FE0);
+const _kAccent = Color(0xFF008080);
 
 class OrderSummaryPanel extends ConsumerStatefulWidget {
   const OrderSummaryPanel({super.key});
@@ -22,7 +22,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
 
   TextEditingController _controllerFor(CartItem item) {
     return _noteControllers.putIfAbsent(
-      item.productId,
+      item.cartLineId,
       () => TextEditingController(text: item.note),
     );
   }
@@ -42,11 +42,11 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
     );
     if (confirmed == true) {
       final removedQty = item.quantity;
-      ref.read(cartProvider.notifier).removeItem(item.productId);
-      if (_editingNoteFor == item.productId) {
+      ref.read(cartProvider.notifier).removeItem(item.cartLineId);
+      if (_editingNoteFor == item.cartLineId) {
         setState(() => _editingNoteFor = null);
       }
-      _noteControllers.remove(item.productId);
+      _noteControllers.remove(item.cartLineId);
       if (!context.mounted) return;
       showCartSnackBar(
         context,
@@ -58,7 +58,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
   }
 
   void _handleIncrement(BuildContext context, CartItem item) {
-    ref.read(cartProvider.notifier).increment(item.productId);
+    ref.read(cartProvider.notifier).increment(item.cartLineId);
     showCartSnackBar(
       context,
       message: '${item.name} ditambah (${item.quantity + 1})',
@@ -69,12 +69,12 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
 
   void _handleDecrement(BuildContext context, CartItem item) {
     final remaining = item.quantity - 1;
-    ref.read(cartProvider.notifier).decrement(item.productId);
-    if (_editingNoteFor == item.productId && remaining <= 0) {
+    ref.read(cartProvider.notifier).decrement(item.cartLineId);
+    if (_editingNoteFor == item.cartLineId && remaining <= 0) {
       setState(() => _editingNoteFor = null);
     }
     if (remaining <= 0) {
-      _noteControllers.remove(item.productId);
+      _noteControllers.remove(item.cartLineId);
       showCartSnackBar(
         context,
         message: '${item.name} dihapus dari pesanan',
@@ -176,18 +176,20 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                         Divider(height: 20, color: Colors.grey.shade200),
                     itemBuilder: (context, index) {
                       final item = cart.items[index];
-                      final isEditing = _editingNoteFor == item.productId;
+                      final isEditing = _editingNoteFor == item.cartLineId;
                       return _CartItemRow(
                         item: item,
                         isEditingNote: isEditing,
                         noteController: _controllerFor(item),
                         onToggleNote: () {
                           setState(() {
-                            _editingNoteFor = isEditing ? null : item.productId;
+                            _editingNoteFor = isEditing
+                                ? null
+                                : item.cartLineId;
                           });
                         },
                         onSaveNote: (value) {
-                          notifier.setNote(item.productId, value);
+                          notifier.setNote(item.cartLineId, value);
                           setState(() => _editingNoteFor = null);
                         },
                         onIncrement: () => _handleIncrement(context, item),
@@ -218,7 +220,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEEF1FD),
+                      color: const Color(0xFFE0F2F1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
@@ -229,7 +231,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                               ? Icons.shopping_bag_outlined
                               : Icons.restaurant_outlined,
                           size: 12,
-                          color: const Color(0xFF3B5FE0),
+                          color: const Color(0xFF008080),
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -239,7 +241,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF3B5FE0),
+                            color: Color(0xFF008080),
                           ),
                         ),
                       ],
@@ -273,7 +275,7 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B5FE0),
+                backgroundColor: const Color(0xFF008080),
                 disabledBackgroundColor: Colors.grey.shade200,
                 disabledForegroundColor: Colors.grey.shade500,
                 foregroundColor: Colors.white,
@@ -319,7 +321,7 @@ class _HeaderIconButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: enabled ? const Color(0xFFEEF1FD) : const Color(0xFFF4F5F9),
+            color: enabled ? const Color(0xFFE0F2F1) : const Color(0xFFF4F5F9),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Stack(
@@ -417,7 +419,7 @@ class _ToggleTab extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF3B5FE0) : Colors.transparent,
+          color: selected ? const Color(0xFF008080) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         alignment: Alignment.center,
@@ -506,13 +508,25 @@ class _CartItemRow extends StatelessWidget {
                       color: Color(0xFF1F2430),
                     ),
                   ),
+                  if (item.variantLabel.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      item.variantLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 2),
                   Text(
                     item.formattedLineTotal,
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 12.5,
-                      color: Color(0xFF3B5FE0),
+                      color: Color(0xFF008080),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -538,7 +552,7 @@ class _CartItemRow extends StatelessWidget {
                             size: 13,
                             color: !isEditingNote && item.note.isNotEmpty
                                 ? Colors.green
-                                : const Color(0xFF3B5FE0),
+                                : const Color(0xFF008080),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -555,7 +569,7 @@ class _CartItemRow extends StatelessWidget {
                             style: TextStyle(
                               color: !isEditingNote && item.note.isNotEmpty
                                   ? Colors.green.shade700
-                                  : const Color(0xFF3B5FE0),
+                                  : const Color(0xFF008080),
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                               height: 1.3,
@@ -597,7 +611,7 @@ class _CartItemRow extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(
-                  color: Color(0xFF3B5FE0),
+                  color: Color(0xFF008080),
                   width: 1.4,
                 ),
               ),
@@ -632,7 +646,7 @@ class _MiniQuantityStepper extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFFEEF1FD),
+            color: const Color(0xFFE0F2F1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -641,7 +655,7 @@ class _MiniQuantityStepper extends StatelessWidget {
               _MiniStepperButton(
                 icon: Icons.remove,
                 onTap: onDecrement,
-                color: const Color(0xFF3B5FE0),
+                color: const Color(0xFF008080),
               ),
               SizedBox(
                 width: 22,
@@ -658,7 +672,7 @@ class _MiniQuantityStepper extends StatelessWidget {
               _MiniStepperButton(
                 icon: Icons.add,
                 onTap: onIncrement,
-                color: const Color(0xFF3B5FE0),
+                color: const Color(0xFF008080),
               ),
             ],
           ),

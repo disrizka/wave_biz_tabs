@@ -167,9 +167,9 @@ class _SideRail extends StatelessWidget {
             height: 46,
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF1FD),
+              color: const Color(0xFFE0F2F1),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFDCE2FA)),
+              border: Border.all(color: const Color(0xFFB2DFDB)),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(13),
@@ -179,7 +179,7 @@ class _SideRail extends StatelessWidget {
                 errorBuilder: (_, __, ___) => const Icon(
                   Icons.storefront,
                   size: 20,
-                  color: Color(0xFF3B5FE0),
+                  color: Color(0xFF008080),
                 ),
               ),
             ),
@@ -239,12 +239,12 @@ class _RailIcon extends StatelessWidget {
         height: 50,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF3B5FE0) : Colors.transparent,
+          color: selected ? const Color(0xFF008080) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF3B5FE0).withOpacity(0.32),
+                    color: const Color(0xFF008080).withOpacity(0.32),
                     blurRadius: 14,
                     offset: const Offset(0, 6),
                   ),
@@ -271,7 +271,7 @@ class _RailIcon extends StatelessWidget {
                     color: Colors.redAccent,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected ? const Color(0xFF3B5FE0) : Colors.white,
+                      color: selected ? const Color(0xFF008080) : Colors.white,
                       width: 1.5,
                     ),
                   ),
@@ -315,7 +315,7 @@ class _BottomNav extends StatelessWidget {
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         elevation: 0,
-        selectedItemColor: const Color(0xFF3B5FE0),
+        selectedItemColor: const Color(0xFF008080),
         unselectedItemColor: Colors.grey.shade500,
         showSelectedLabels: false,
         showUnselectedLabels: false,

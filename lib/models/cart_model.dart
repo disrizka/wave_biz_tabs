@@ -23,6 +23,16 @@ class CartItem {
   final int quantity;
   final String note;
 
+  /// The selected SKU's uuid, or '' when the product has no variants.
+  final String skuUuid;
+
+  /// The selected SKU's idProductSku (what the sales API expects as
+  /// product_sku_id), or '' when the product has no variants.
+  final String skuId;
+
+  /// Human-readable variant summary, e.g. "Chicken, Small".
+  final String variantLabel;
+
   const CartItem({
     required this.productId,
     required this.name,
@@ -30,20 +40,36 @@ class CartItem {
     this.photoPath = '',
     this.quantity = 1,
     this.note = '',
+    this.skuUuid = '',
+    this.skuId = '',
+    this.variantLabel = '',
   });
+
+  /// Unique key for this cart line. Two lines can share the same
+  /// [productId] when they're different variants of the same product, so
+  /// every cart-mutating call (increment/decrement/removeItem/setNote)
+  /// should key off this instead of [productId].
+  String get cartLineId => skuUuid.isEmpty ? productId : '$productId::$skuUuid';
 
   int get lineTotal => unitPrice * quantity;
   String get formattedLineTotal => formatIDR(lineTotal);
 
-  factory CartItem.fromProduct(ProductModel product, {int quantity = 1}) {
+  factory CartItem.fromProduct(
+    ProductModel product, {
+    ProductSku? sku,
+    int quantity = 1,
+  }) {
     return CartItem(
       productId: product.idProduct.isNotEmpty
           ? product.idProduct
           : product.uuid,
       name: product.name,
-      unitPrice: product.basePrice,
+      unitPrice: sku?.price ?? product.basePrice,
       photoPath: product.photoPath,
       quantity: quantity,
+      skuUuid: sku?.uuid ?? '',
+      skuId: sku?.idProductSku ?? '',
+      variantLabel: sku?.label ?? '',
     );
   }
 
@@ -55,6 +81,9 @@ class CartItem {
       photoPath: photoPath,
       quantity: quantity ?? this.quantity,
       note: note ?? this.note,
+      skuUuid: skuUuid,
+      skuId: skuId,
+      variantLabel: variantLabel,
     );
   }
 
@@ -65,6 +94,9 @@ class CartItem {
     'photoPath': photoPath,
     'quantity': quantity,
     'note': note,
+    'skuUuid': skuUuid,
+    'skuId': skuId,
+    'variantLabel': variantLabel,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
@@ -75,6 +107,9 @@ class CartItem {
       photoPath: json['photoPath']?.toString() ?? '',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       note: json['note']?.toString() ?? '',
+      skuUuid: json['skuUuid']?.toString() ?? '',
+      skuId: json['skuId']?.toString() ?? '',
+      variantLabel: json['variantLabel']?.toString() ?? '',
     );
   }
 }

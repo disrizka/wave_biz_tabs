@@ -64,7 +64,7 @@ class TabletLoginLayout extends StatelessWidget {
         Expanded(
           flex: 5,
           child: Container(
-            color: const Color(0xFFE4E9FB),
+            color: const Color(0xFFE0F2F1),
             alignment: Alignment.center,
             padding: const EdgeInsets.all(32),
             child: ConstrainedBox(
@@ -95,7 +95,7 @@ class _DotsIndicator extends StatelessWidget {
           width: isActive ? 18 : 6,
           height: 6,
           decoration: BoxDecoration(
-            color: isActive ? const Color(0xFF3E5FCE) : Colors.grey.shade300,
+            color: isActive ? const Color(0xFF008080) : Colors.grey.shade300,
             borderRadius: BorderRadius.circular(3),
           ),
         );

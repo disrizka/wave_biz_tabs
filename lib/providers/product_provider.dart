@@ -209,13 +209,30 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       final resp = await _fetchWithRetry();
 
       if (resp.allProducts) {
+        // /product/pos's own embedded product list can be missing/stale SKU
+        // data (prices, variant attributes) — same reason the branch below
+        // re-fetches per category. Re-fetch the full list via the reliable
+        // /product (flat) endpoint too, so variant products (like Sandwich)
+        // actually carry their productSkus/prices.
+        Map<String, List<ProductModel>> productsByCategoryName =
+            resp.productsByCategoryName;
+        ProductPageMeta pageMeta = resp.page;
+        try {
+          final flat = await _fetchFlatGroupedWithRetry();
+          productsByCategoryName = flat.grouped;
+          pageMeta = flat.page;
+        } catch (_) {
+          // Fall back to whatever /product/pos returned if the flat
+          // endpoint fails, rather than blocking the whole screen.
+        }
+
         state = state.copyWith(
           isLoading: false,
           allProducts: true,
           categories: resp.categories,
-          productsByCategoryName: resp.productsByCategoryName,
+          productsByCategoryName: productsByCategoryName,
           clearSelectedCategory: true,
-          pageMeta: resp.page,
+          pageMeta: pageMeta,
           backendPage: 1,
           revealCount: kPageRevealBatch,
         );

@@ -4,8 +4,8 @@ import 'package:wave_biz_tabs/models/business_model.dart';
 import 'package:wave_biz_tabs/providers/auth_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
 
-const _kBrandBlue = Color(0xFF3B5FE0);
-const _kBrandBlueDark = Color(0xFF2A46B8);
+const _kBrandBlue = Color(0xFF008080);
+const _kBrandBlueDark = Color(0xFF00695C);
 const _kBg = Color(0xFFF4F6FB);
 
 /// Halaman Profil.
@@ -177,7 +177,7 @@ class ProfileScreen extends ConsumerWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEEF1FD),
+                            color: const Color(0xFFE0F2F1),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: ClipRRect(
@@ -247,7 +247,7 @@ class ProfileScreen extends ConsumerWidget {
                     children: [
                       _ActionTile(
                         icon: Icons.swap_horiz_rounded,
-                        iconBg: const Color(0xFFEEF1FD),
+                        iconBg: const Color(0xFFE0F2F1),
                         iconColor: _kBrandBlue,
                         title: 'Ganti Bisnis',
                         subtitle: canSwitch

@@ -117,7 +117,7 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
                     _obscurePassword
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
-                    color: const Color(0xFF3E5FCE),
+                    color: const Color(0xFF008080),
                   ),
                   onPressed: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
@@ -137,13 +137,11 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
                   minimumSize: const Size(0, 0),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: () {
-                
-                },
+                onPressed: () {},
                 child: const Text(
                   'Forgot passsword?',
                   style: TextStyle(
-                    color: Color(0xFF3E5FCE),
+                    color: Color(0xFF008080),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -156,7 +154,7 @@ class _LoginFormCardState extends ConsumerState<LoginFormCard> {
               child: ElevatedButton(
                 onPressed: authState.isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3E5FCE),
+                  backgroundColor: const Color(0xFF008080),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

@@ -6,7 +6,7 @@ import 'package:wave_biz_tabs/models/draft_order_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/providers/draft_provider.dart';
 
-const _kAccent = Color(0xFF3B5FE0);
+const _kAccent = Color(0xFF008080);
 
 /// Panggil dari icon "History" di Order Summary Panel:
 /// ```dart
@@ -211,7 +211,7 @@ class _DraftCard extends StatelessWidget {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEEF1FD),
+                    color: const Color(0xFFE0F2F1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Row(
@@ -352,7 +352,7 @@ class _ReplaceOrderDialog extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF1FD),
+                color: const Color(0xFFE0F2F1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(

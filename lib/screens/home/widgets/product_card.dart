@@ -19,6 +19,11 @@ class ProductCard extends StatelessWidget {
     this.onRemove,
   });
 
+  /// Variant products always show the "Add" action (it opens the variant
+  /// picker) since a single quantity stepper can't represent several SKUs
+  /// added at once — the actual per-variant quantities live in the cart.
+  bool get _showStepper => quantity > 0 && !product.hasVariants;
+
   Widget _buildProductImage() {
     if (product.photoPath.isNotEmpty) {
       return Image.network(
@@ -127,9 +132,9 @@ class ProductCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  product.isOutOfStock ? '-' : product.formattedPrice,
+                  product.isOutOfStock ? '-' : product.priceLabel,
                   style: const TextStyle(
-                    color: Color(0xFF3B5FE0),
+                    color: Color(0xFF008080),
                     fontWeight: FontWeight.w700,
                     fontSize: 12.5,
                   ),
@@ -138,7 +143,7 @@ class ProductCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 32,
-                  child: quantity > 0
+                  child: _showStepper
                       ? _QuantityStepper(
                           quantity: quantity,
                           onIncrement: onIncrement,
@@ -147,16 +152,23 @@ class ProductCard extends StatelessWidget {
                         )
                       : ElevatedButton.icon(
                           onPressed: product.isOutOfStock ? null : onAdd,
-                          icon: const Icon(Icons.add_shopping_cart, size: 15),
-                          label: const Text(
-                            'Add Product',
-                            style: TextStyle(
+                          icon: Icon(
+                            product.hasVariants
+                                ? Icons.tune_rounded
+                                : Icons.add_shopping_cart,
+                            size: 15,
+                          ),
+                          label: Text(
+                            product.hasVariants && quantity > 0
+                                ? 'Add Product ($quantity)'
+                                : 'Add Product',
+                            style: const TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B5FE0),
+                            backgroundColor: const Color(0xFF008080),
                             disabledBackgroundColor: Colors.grey.shade200,
                             disabledForegroundColor: Colors.grey.shade500,
                             foregroundColor: Colors.white,
@@ -194,7 +206,7 @@ class _QuantityStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF1FD),
+        color: const Color(0xFFE0F2F1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -202,7 +214,7 @@ class _QuantityStepper extends StatelessWidget {
           _StepperButton(
             icon: Icons.remove,
             onTap: onDecrement,
-            color: const Color(0xFF3B5FE0),
+            color: const Color(0xFF008080),
           ),
           Expanded(
             child: Center(
@@ -219,9 +231,9 @@ class _QuantityStepper extends StatelessWidget {
           _StepperButton(
             icon: Icons.add,
             onTap: onIncrement,
-            color: const Color(0xFF3B5FE0),
+            color: const Color(0xFF008080),
           ),
-          Container(width: 1, height: 20, color: const Color(0xFFDCE2FA)),
+          Container(width: 1, height: 20, color: const Color(0xFFB2DFDB)),
           _StepperButton(
             icon: Icons.delete_outline,
             onTap: onRemove,

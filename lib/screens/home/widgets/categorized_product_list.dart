@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wave_biz_tabs/models/product_model.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/cart_connected_product_card.dart';
 
-const _kBrandBlue = Color(0xFF3B5FE0);
+const _kBrandBlue = Color(0xFF008080);
 const _kBarHeight = 38.0;
 
 /// Shows products grouped by category, with a horizontal chip bar up top

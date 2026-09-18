@@ -68,7 +68,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF3B5FE0), width: 1.4),
+          borderSide: const BorderSide(color: Color(0xFF008080), width: 1.4),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:wave_biz_tabs/core/snackbar_utils.dart';
 import 'package:wave_biz_tabs/models/product_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/product_card.dart';
+import 'package:wave_biz_tabs/screens/home/widgets/variant_picker_sheet.dart';
 
 class CartConnectedProductCard extends ConsumerWidget {
   final ProductModel product;
@@ -22,7 +23,24 @@ class CartConnectedProductCard extends ConsumerWidget {
     return ProductCard(
       product: product,
       quantity: qty,
-      onAdd: () {
+      onAdd: () async {
+        if (product.hasVariants) {
+          final picked = await showVariantPickerSheet(context, product);
+          if (picked == null) return;
+          cartNotifier.addProduct(
+            product,
+            sku: picked.sku,
+            quantity: picked.quantity,
+          );
+          if (!context.mounted) return;
+          showCartSnackBar(
+            context,
+            message: '${product.name} (${picked.sku.label}) ditambahkan',
+            icon: Icons.add_shopping_cart_rounded,
+            color: Colors.green,
+          );
+          return;
+        }
         cartNotifier.addProduct(product);
         showCartSnackBar(
           context,
