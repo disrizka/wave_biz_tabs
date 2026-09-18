@@ -5,14 +5,6 @@ import 'package:wave_biz_tabs/screens/home/widgets/cart_connected_product_card.d
 const _kBrandBlue = Color(0xFF008080);
 const _kBarHeight = 38.0;
 
-/// Shows products grouped by category, with a horizontal chip bar up top
-/// that jumps (scrolls) to a category when tapped — like GoFood.
-///
-/// Only ONE sticky category label is ever pinned on screen at a time: it's
-/// a single overlay bar (not a SliverPersistentHeader per category), whose
-/// text tracks whichever section is currently scrolled under it. Previously
-/// every category had its own pinned header, so short/adjacent sections
-/// could all appear stacked together at once.
 class CategorizedProductList extends StatefulWidget {
   final Map<String, List<ProductModel>> productsByCategoryName;
   final int columns;
@@ -31,10 +23,6 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewKey = GlobalKey();
   final Map<String, GlobalKey> _sectionKeys = {};
-
-  /// Null while at the very top (nothing scrolled under the bar yet, "All
-  /// Product" reads as selected). Otherwise the name of whichever section
-  /// is currently under the sticky bar.
   String? _activeCategory;
 
   List<String> get _names => widget.productsByCategoryName.keys
@@ -87,8 +75,6 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
       final ctx = _sectionKeys[name]?.currentContext;
       final box = ctx?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
-      // Offset by the bar's own height: a section only counts as "active"
-      // once it has actually scrolled up underneath the sticky bar.
       final y = box.localToGlobal(Offset.zero).dy - origin - _kBarHeight;
       if (y <= 4 && y > bestY) {
         bestY = y;
@@ -215,10 +201,6 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
                         const SliverToBoxAdapter(child: SizedBox(height: 24)),
                       ],
                     ),
-                    // The single sticky bar. Only ever shows ONE category
-                    // name, no matter how short the neighbouring sections
-                    // are — this is what replaces the old per-category
-                    // pinned headers that could stack up together.
                     if (_activeCategory != null)
                       Positioned(
                         left: 0,

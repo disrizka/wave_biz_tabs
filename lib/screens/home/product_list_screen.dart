@@ -110,9 +110,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     );
   }
 
-  /// Uses the sticky per-category list (GoFood style) for catalogs under
-  /// ~200 products (state.allProducts == true) when not searching, and the
-  /// existing paginated flat grid + category dropdown otherwise.
   Widget _buildContent({
     required BuildContext context,
     required ProductHomeState state,
@@ -162,7 +159,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       );
     }
 
-    // Backend-paginated flat grid (200+ products) or active search results.
     final products = state.visibleProducts;
     final isMobile = Responsive.isMobile(context);
 

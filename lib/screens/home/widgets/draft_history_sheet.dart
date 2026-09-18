@@ -8,10 +8,6 @@ import 'package:wave_biz_tabs/providers/draft_provider.dart';
 
 const _kAccent = Color(0xFF008080);
 
-/// Panggil dari icon "History" di Order Summary Panel:
-/// ```dart
-/// onTap: () => showDraftHistorySheet(context, ref),
-/// ```
 Future<void> showDraftHistorySheet(BuildContext context, WidgetRef ref) {
   return showDialog(
     context: context,
@@ -322,8 +318,6 @@ class _DraftCard extends StatelessWidget {
   }
 }
 
-/// Confirmation shown when resuming a draft while the active cart is not
-/// empty — resuming replaces whatever is currently in progress.
 class _ReplaceOrderDialog extends StatelessWidget {
   const _ReplaceOrderDialog();
 
@@ -525,8 +519,6 @@ class _DeleteDraftDialog extends StatelessWidget {
   }
 }
 
-/// Formats a timestamp as a short, human-friendly "time ago" string in
-/// Indonesian (e.g. "Baru saja", "5 menit lalu", "2 jam lalu").
 String _timeAgo(DateTime dt) {
   final diff = DateTime.now().difference(dt);
   if (diff.inSeconds < 60) return 'Baru saja';

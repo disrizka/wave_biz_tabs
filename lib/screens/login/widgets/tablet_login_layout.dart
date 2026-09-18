@@ -60,7 +60,6 @@ class TabletLoginLayout extends StatelessWidget {
           ),
         ),
 
-        // Panel kanan
         Expanded(
           flex: 5,
           child: Container(

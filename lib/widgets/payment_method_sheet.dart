@@ -6,13 +6,7 @@ import '../../models/sale_request.dart';
 
 const _kAccent = Color(0xFF008080);
 
-/// Panggil dari tombol "Continue Payment":
-/// ```dart
-/// onPressed: () => showPaymentMethodSheet(context, ref),
-/// ```
 Future<void> showPaymentMethodSheet(BuildContext context, WidgetRef ref) {
-  // Reset dulu supaya tidak membawa status success/error dari percobaan
-  // sebelumnya saat modal dibuka lagi.
   ref.read(checkoutProvider.notifier).reset();
 
   return showDialog(
@@ -327,8 +321,6 @@ void _showSuccessDialog(BuildContext context) {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                // FIX: pakai dialogContext (context milik dialog ini),
-                // bukan context luar yang sudah di-pop sebelumnya.
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text(
                   "Okay",

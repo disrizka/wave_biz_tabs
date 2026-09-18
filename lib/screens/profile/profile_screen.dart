@@ -8,10 +8,6 @@ const _kBrandBlue = Color(0xFF008080);
 const _kBrandBlueDark = Color(0xFF00695C);
 const _kBg = Color(0xFFF4F6FB);
 
-/// Halaman Profil.
-///
-/// Diakses dari ikon profile (bukan logo bisnis). Dari sini user bisa
-/// membuka switcher untuk "Ganti Bisnis" atau "Keluar" dari akun.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 

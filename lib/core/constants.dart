@@ -4,6 +4,18 @@ class ApiConstants {
   static const String refreshToken = '$baseUrl/user/refresh-token';
   static const String basicAuthCredential =
       'Basic bWFudWFsX2FwcDpkZGY0YjY1OTE2NTc2N2E2Mjc4NGY5NGM0ZWU1NmQwNzVkYjEwYzk0NTBkYTVjZjgxYjZhZjdiOWY1NmYxZWY3';
+
+  /// GET /waveup/{idBusiness}/transaction/sales — list transaksi.
+  static String transactionSales(String businessId) =>
+      '$baseUrl/waveup/$businessId/transaction/sales';
+
+  /// GET /waveup/{idBusiness}/transaction/sales/{idTransaction}/payment-check
+  /// — detail transaksi + status pembayaran.
+  static String transactionPaymentCheck(
+    String businessId,
+    String idTransaction,
+  ) =>
+      '$baseUrl/waveup/$businessId/transaction/sales/$idTransaction/payment-check';
 }
 
 class AppConstants {

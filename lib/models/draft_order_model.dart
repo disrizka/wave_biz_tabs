@@ -2,8 +2,6 @@ library;
 
 import 'package:wave_biz_tabs/models/cart_model.dart';
 
-/// A snapshot of a cart that has been parked as a draft so the cashier can
-/// serve another customer and resume this order later from the history list.
 class DraftOrder {
   final String id;
   final List<CartItem> items;

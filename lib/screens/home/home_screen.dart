@@ -5,6 +5,7 @@ import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/order_summary_panel.dart';
 import 'package:wave_biz_tabs/screens/profile/profile_screen.dart';
 import 'product_list_screen.dart';
+import 'transaction_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -69,7 +70,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           businessId: activeBusiness.idBusiness,
         ),
         const OrderSummaryPanel(),
-        const _ComingSoonScreen(title: 'Transaksi'),
+        TransactionListScreen(
+          key: ValueKey('transactions-${activeBusiness.idBusiness}'),
+          businessId: activeBusiness.idBusiness,
+        ),
       ],
     );
 
@@ -354,29 +358,6 @@ class _BottomNav extends StatelessWidget {
           const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ComingSoonScreen extends StatelessWidget {
-  const _ComingSoonScreen({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.hourglass_empty, size: 40, color: Colors.grey.shade400),
-          const SizedBox(height: 8),
-          Text(
-            '$title - segera hadir',
-            style: TextStyle(color: Colors.grey.shade500),
           ),
         ],
       ),

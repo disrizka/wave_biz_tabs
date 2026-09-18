@@ -5,9 +5,6 @@ const _kAccent = Color(0xFF008080);
 const _kAccentTint = Color(0xFFE0F2F1);
 const _kAccentBorder = Color(0xFFB2DFDB);
 
-/// Shows the variant picker sheet for [product] (which must have
-/// `hasVariants == true`). Resolves to the chosen `(sku, quantity)` pair,
-/// or null if the person dismissed the sheet without adding.
 Future<({ProductSku sku, int quantity})?> showVariantPickerSheet(
   BuildContext context,
   ProductModel product,
@@ -186,6 +183,8 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                                     vertical: 9,
                                   ),
                                   child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
                                       Icon(
                                         isSelected
@@ -202,6 +201,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                                           value,
                                           style: TextStyle(
                                             fontSize: 13.5,
+                                            height: 1.0,
                                             fontWeight: isSelected
                                                 ? FontWeight.w600
                                                 : FontWeight.w500,

@@ -2,7 +2,6 @@ library;
 
 import 'package:wave_biz_tabs/models/product_model.dart';
 
-/// Formats an integer amount as "IDR 20.000" (dot thousand separators).
 String formatIDR(int amount) {
   final s = amount.toString();
   final buffer = StringBuffer();
@@ -14,7 +13,6 @@ String formatIDR(int amount) {
   return 'IDR $buffer';
 }
 
-/// A single line in the current order / cart.
 class CartItem {
   final String productId;
   final String name;
@@ -22,15 +20,8 @@ class CartItem {
   final String photoPath;
   final int quantity;
   final String note;
-
-  /// The selected SKU's uuid, or '' when the product has no variants.
   final String skuUuid;
-
-  /// The selected SKU's idProductSku (what the sales API expects as
-  /// product_sku_id), or '' when the product has no variants.
   final String skuId;
-
-  /// Human-readable variant summary, e.g. "Chicken, Small".
   final String variantLabel;
 
   const CartItem({
@@ -45,10 +36,6 @@ class CartItem {
     this.variantLabel = '',
   });
 
-  /// Unique key for this cart line. Two lines can share the same
-  /// [productId] when they're different variants of the same product, so
-  /// every cart-mutating call (increment/decrement/removeItem/setNote)
-  /// should key off this instead of [productId].
   String get cartLineId => skuUuid.isEmpty ? productId : '$productId::$skuUuid';
 
   int get lineTotal => unitPrice * quantity;

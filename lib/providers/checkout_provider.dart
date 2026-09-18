@@ -5,6 +5,7 @@ import '../core/constants.dart';
 import '../models/sale_request.dart';
 import 'auth_provider.dart';
 import 'card_provider.dart';
+import 'transaction_provider.dart';
 
 enum CheckoutStatus { idle, loading, success, error }
 
@@ -46,16 +47,10 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
     state = state.copyWith(selectedMethod: method, clearError: true);
   }
 
-  /// Panggil ini setiap kali modal payment dibuka, supaya tidak membawa
-  /// status "success"/"error" dari percobaan sebelumnya.
   void reset() {
     state = const CheckoutState();
   }
 
-  /// Dipanggil saat tombol "Payment" ditekan.
-  /// Cash & Debit -> langsung POST ke transaction/sales pakai isi cart saat ini.
-  /// QRIS -> sengaja belum diproses (menunggu integrasi Midtrans), supaya
-  /// tidak mengganggu alur Cash/Debit yang sudah bisa jalan.
   Future<void> submit() async {
     final method = state.selectedMethod;
     if (method == null) {
@@ -106,8 +101,6 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
           .map(
             (item) => SaleItem(
               productId: item.productId,
-              // Real SKU id when the product has variants; falls back to
-              // the product id for simple (non-variant) products.
               productSkuId: item.skuId.isNotEmpty ? item.skuId : item.productId,
               qty: item.quantity,
               price: item.unitPrice,
@@ -124,6 +117,7 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
       );
       state = state.copyWith(status: CheckoutStatus.success);
       ref.read(cartProvider.notifier).clear();
+      ref.invalidate(transactionListProvider);
     } catch (e) {
       state = state.copyWith(
         status: CheckoutStatus.error,

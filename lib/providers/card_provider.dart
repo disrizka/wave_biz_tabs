@@ -21,9 +21,6 @@ class CartState {
   int get totalAmount => items.fold(0, (sum, i) => sum + i.lineTotal);
   String get formattedTotal => formatIDR(totalAmount);
   bool get isEmpty => items.isEmpty;
-
-  /// Total quantity across every cart line for this product, regardless of
-  /// which variant/SKU was picked for each line.
   int quantityOf(String productId) {
     return items
         .where((i) => i.productId == productId)
@@ -56,8 +53,6 @@ class CartNotifier extends Notifier<CartState> {
   CartState build() {
     ref.listen(authProvider, (previous, next) {
       if (previous?.activeBusinessId != next.activeBusinessId) {
-        // Kosongkan cart dulu supaya UI langsung menunjukkan 0,
-        // baru load data cart milik bisnis yang baru aktif.
         state = const CartState(items: [], isLoaded: false);
         _load();
       }
@@ -106,10 +101,6 @@ class CartNotifier extends Notifier<CartState> {
     _persistOrderType();
   }
 
-  /// Adds [product] to the cart. Pass [sku] for products that require a
-  /// variant selection (`product.hasVariants`) — the matching cart line is
-  /// found via the product+SKU combination, not the product alone, so
-  /// picking a different variant always creates its own line.
   void addProduct(ProductModel product, {ProductSku? sku, int quantity = 1}) {
     final newItem = CartItem.fromProduct(product, sku: sku, quantity: quantity);
     final items = [...state.items];
@@ -169,7 +160,6 @@ class CartNotifier extends Notifier<CartState> {
     _persistItems();
   }
 
-  /// Replaces the current cart with items restored from a saved draft.
   void restore({required List<CartItem> items, required OrderType orderType}) {
     state = state.copyWith(items: items, orderType: orderType);
     _persistItems();

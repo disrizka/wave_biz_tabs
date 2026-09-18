@@ -1,6 +1,5 @@
 library;
 
-/// A single attribute/value pair on a SKU, e.g. {name: "Size", value: "Large"}.
 class ProductSkuAttribute {
   final String name;
   final String value;
@@ -15,8 +14,6 @@ class ProductSkuAttribute {
   }
 }
 
-/// A purchasable variant of a product (e.g. Topping: Chicken / Size: Small),
-/// as returned inside `productSkus` by GET /waveup/{businessId}/product.
 class ProductSku {
   final String uuid;
   final String idProductSku;
@@ -34,12 +31,9 @@ class ProductSku {
     this.attributes = const [],
   });
 
-  /// "Chicken, Small" — used as the cart line's variant label.
   String get label => attributes.map((a) => a.value).join(', ');
 
   factory ProductSku.fromJson(Map<String, dynamic> json) {
-    // attributesV2 is the newer/corrected shape; fall back to attributes
-    // when it's absent or empty.
     final v2 = (json['attributesV2'] as List?) ?? const [];
     final v1 = (json['attributes'] as List?) ?? const [];
     final raw = v2.isNotEmpty ? v2 : v1;
@@ -149,8 +143,6 @@ class ProductModel {
     return groups;
   }
 
-  /// Finds the SKU whose attributes exactly match [selection]
-  /// (attribute name -> selected value).
   ProductSku? skuForSelection(Map<String, String> selection) {
     for (final sku in skus) {
       final attrMap = {for (final a in sku.attributes) a.name: a.value};
@@ -197,10 +189,6 @@ class ProductModel {
   }
 
   String get formattedPrice => 'Rp. ${_formatRupiah(basePrice)}';
-
-  /// What to show on the product card/list: a plain price for simple
-  /// products, or "Mulai Rp. X" (starting from) when variants have
-  /// different prices.
   String get priceLabel {
     if (hasVariants && minVariantPrice != maxVariantPrice) {
       return 'Mulai Rp. ${_formatRupiah(minVariantPrice)}';
@@ -290,8 +278,6 @@ class ProductPosResponse {
   }
 }
 
-/// Response shape for GET /waveup/{businessId}/product (flat list endpoint).
-/// Unlike /product/pos, this endpoint reliably respects `id_category`.
 class ProductFlatResponse {
   final List<ProductModel> products;
   final ProductPageMeta page;

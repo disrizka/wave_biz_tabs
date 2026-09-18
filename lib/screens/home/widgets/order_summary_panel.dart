@@ -292,8 +292,6 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
   }
 }
 
-/// Small square icon button used in the Order Summary header for
-/// "Save draft" and "Draft history", with an optional red count badge.
 class _HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -720,8 +718,6 @@ class _MiniStepperButton extends StatelessWidget {
   }
 }
 
-/// Polished confirmation dialog shown before removing a product from the
-/// order — rounded card, warning icon, and a two-button footer.
 class _DeleteProductDialog extends StatelessWidget {
   final String productName;
 

@@ -147,9 +147,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     }
   }
 
-  /// Fetches products via the reliable /product endpoint and groups them
-  /// by categoryName so it slots into the existing productsByCategoryName
-  /// state shape.
   Future<({Map<String, List<ProductModel>> grouped, ProductPageMeta page})>
   _fetchFlatGroupedWithRetry({
     String? categoryId,
@@ -190,8 +187,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     final bId = _businessId;
 
     if (resetState) {
-      // Reset to a clean slate first so switching business never shows the
-      // previous business's categories/products while the new data loads.
       state = const ProductHomeState(isLoading: true);
     } else {
       state = state.copyWith(isLoading: true, clearError: true);
@@ -209,11 +204,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       final resp = await _fetchWithRetry();
 
       if (resp.allProducts) {
-        // /product/pos's own embedded product list can be missing/stale SKU
-        // data (prices, variant attributes) — same reason the branch below
-        // re-fetches per category. Re-fetch the full list via the reliable
-        // /product (flat) endpoint too, so variant products (like Sandwich)
-        // actually carry their productSkus/prices.
         Map<String, List<ProductModel>> productsByCategoryName =
             resp.productsByCategoryName;
         ProductPageMeta pageMeta = resp.page;
@@ -222,8 +212,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           productsByCategoryName = flat.grouped;
           pageMeta = flat.page;
         } catch (_) {
-          // Fall back to whatever /product/pos returned if the flat
-          // endpoint fails, rather than blocking the whole screen.
         }
 
         state = state.copyWith(
@@ -256,9 +244,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           ? resp.categories.first.name
           : null;
 
-      // /product/pos's own grouped products can be stale for non-first
-      // categories, so re-fetch the default category via the reliable
-      // /product (flat) endpoint instead of trusting resp.productsByCategoryName.
       Map<String, List<ProductModel>> productsByCategoryName =
           resp.productsByCategoryName;
       ProductPageMeta pageMeta = resp.page;
@@ -271,8 +256,6 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           productsByCategoryName = flat.grouped;
           pageMeta = flat.page;
         } catch (_) {
-          // Fall back to whatever /product/pos returned if the flat
-          // endpoint fails, rather than blocking the whole screen.
         }
       }
 

@@ -19,9 +19,6 @@ class ProductCard extends StatelessWidget {
     this.onRemove,
   });
 
-  /// Variant products always show the "Add" action (it opens the variant
-  /// picker) since a single quantity stepper can't represent several SKUs
-  /// added at once — the actual per-variant quantities live in the cart.
   bool get _showStepper => quantity > 0 && !product.hasVariants;
 
   Widget _buildProductImage() {
