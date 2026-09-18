@@ -3,10 +3,16 @@ import 'package:wave_biz_tabs/models/product_model.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/cart_connected_product_card.dart';
 
 const _kBrandBlue = Color(0xFF3B5FE0);
+const _kBarHeight = 38.0;
 
-/// Shows products grouped by category, each with a name header that sticks
-/// to the top of the list while its section is in view (like GoFood), plus
-/// a horizontal chip bar up top that jumps to a category when tapped.
+/// Shows products grouped by category, with a horizontal chip bar up top
+/// that jumps (scrolls) to a category when tapped — like GoFood.
+///
+/// Only ONE sticky category label is ever pinned on screen at a time: it's
+/// a single overlay bar (not a SliverPersistentHeader per category), whose
+/// text tracks whichever section is currently scrolled under it. Previously
+/// every category had its own pinned header, so short/adjacent sections
+/// could all appear stacked together at once.
 class CategorizedProductList extends StatefulWidget {
   final Map<String, List<ProductModel>> productsByCategoryName;
   final int columns;
@@ -24,7 +30,11 @@ class CategorizedProductList extends StatefulWidget {
 class _CategorizedProductListState extends State<CategorizedProductList> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewKey = GlobalKey();
-  final Map<String, GlobalKey> _headerKeys = {};
+  final Map<String, GlobalKey> _sectionKeys = {};
+
+  /// Null while at the very top (nothing scrolled under the bar yet, "All
+  /// Product" reads as selected). Otherwise the name of whichever section
+  /// is currently under the sticky bar.
   String? _activeCategory;
 
   List<String> get _names => widget.productsByCategoryName.keys
@@ -56,7 +66,7 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
   }
 
   GlobalKey _keyFor(String name) =>
-      _headerKeys.putIfAbsent(name, () => GlobalKey());
+      _sectionKeys.putIfAbsent(name, () => GlobalKey());
 
   void _updateActiveCategory() {
     if (!_scrollController.hasClients) return;
@@ -74,10 +84,12 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
     String? best;
     double bestY = -double.infinity;
     for (final name in _names) {
-      final ctx = _headerKeys[name]?.currentContext;
+      final ctx = _sectionKeys[name]?.currentContext;
       final box = ctx?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
-      final y = box.localToGlobal(Offset.zero).dy - origin;
+      // Offset by the bar's own height: a section only counts as "active"
+      // once it has actually scrolled up underneath the sticky bar.
+      final y = box.localToGlobal(Offset.zero).dy - origin - _kBarHeight;
       if (y <= 4 && y > bestY) {
         bestY = y;
         best = name;
@@ -98,7 +110,7 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
   }
 
   void _scrollToCategory(String name) {
-    final ctx = _headerKeys[name]?.currentContext;
+    final ctx = _sectionKeys[name]?.currentContext;
     if (ctx != null) {
       Scrollable.ensureVisible(
         ctx,
@@ -147,87 +159,93 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
                     style: TextStyle(color: Colors.grey.shade500),
                   ),
                 )
-              : CustomScrollView(
-                  key: _scrollViewKey,
-                  controller: _scrollController,
-                  slivers: [
-                    for (final name in names) ...[
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _CategoryHeaderDelegate(
-                          name: name,
-                          headerKey: _keyFor(name),
+              : Stack(
+                  children: [
+                    CustomScrollView(
+                      key: _scrollViewKey,
+                      controller: _scrollController,
+                      slivers: [
+                        // Reserves room so the first section's own label
+                        // isn't hidden underneath the sticky bar overlay.
+                        const SliverToBoxAdapter(
+                          child: SizedBox(height: _kBarHeight),
                         ),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(0, 10, 0, 6),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: widget.columns,
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                childAspectRatio: 0.62,
+                        for (final name in names) ...[
+                          SliverToBoxAdapter(
+                            child: Container(
+                              key: _keyFor(name),
+                              alignment: Alignment.centerLeft,
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1F2430),
+                                ),
                               ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final product =
-                                  widget.productsByCategoryName[name]![index];
-                              return CartConnectedProductCard(product: product);
-                            },
-                            childCount:
-                                widget.productsByCategoryName[name]!.length,
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(0, 2, 0, 6),
+                            sliver: SliverGrid(
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: widget.columns,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    childAspectRatio: 0.62,
+                                  ),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final product = widget
+                                      .productsByCategoryName[name]![index];
+                                  return CartConnectedProductCard(
+                                    product: product,
+                                  );
+                                },
+                                childCount:
+                                    widget.productsByCategoryName[name]!.length,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                      ],
+                    ),
+                    // The single sticky bar. Only ever shows ONE category
+                    // name, no matter how short the neighbouring sections
+                    // are — this is what replaces the old per-category
+                    // pinned headers that could stack up together.
+                    if (_activeCategory != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          height: _kBarHeight,
+                          color: Colors.white,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _activeCategory!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1F2430),
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   ],
                 ),
         ),
       ],
     );
   }
-}
-
-class _CategoryHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final String name;
-  final GlobalKey headerKey;
-
-  _CategoryHeaderDelegate({required this.name, required this.headerKey});
-
-  @override
-  double get minExtent => 38;
-
-  @override
-  double get maxExtent => 38;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      key: headerKey,
-      color: Colors.white,
-      alignment: Alignment.centerLeft,
-      child: Text(
-        name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF1F2430),
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _CategoryHeaderDelegate oldDelegate) =>
-      oldDelegate.name != name;
 }
 
 class _SimpleChip extends StatelessWidget {
