@@ -1,135 +1,217 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../core/constants.dart';
-import '../models/transaction_model.dart';
-import 'api_service.dart';
+
+import 'package:wave_biz_tabs/models/transaction_model.dart';
+import 'package:wave_biz_tabs/services/api_service.dart'; // sumber ApiException
+
+/// Payment methods as defined by the Wave API.
+enum PaymentMethod {
+  cash(1, 'Tunai'),
+  midtransDebit(2, 'Midtrans Debit'), // tidak dipakai / not used
+  midtransRegular(3, 'Midtrans Biasa (QRIS / Snap)'),
+  edc(4, 'EDC'), // perlu input nomor kartu pelanggan tambahan
+  tt(5, 'TT'),
+  shopee(6, 'Shopee');
+
+  final int code;
+  final String label;
+  const PaymentMethod(this.code, this.label);
+}
+
+class SaleItemInput {
+  final String productId;
+  final String productSkuId;
+  final int qty;
+  final int discount;
+  final int price;
+
+  SaleItemInput({
+    required this.productId,
+    required this.productSkuId,
+    required this.qty,
+    this.discount = 0,
+    required this.price,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'product_id': productId,
+    'product_sku_id': productSkuId,
+    'qty': qty,
+    'discount': discount,
+    'price': price,
+  };
+}
+
+/// Result of creating a sale (used for QRIS / Midtrans flow to get payment_link).
+class TransactionSaleResult {
+  final String idTransaction;
+  final String status;
+  final int amount;
+  final String? paymentToken;
+  final String? paymentLink;
+
+  TransactionSaleResult({
+    required this.idTransaction,
+    required this.status,
+    required this.amount,
+    this.paymentToken,
+    this.paymentLink,
+  });
+
+  factory TransactionSaleResult.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>;
+    return TransactionSaleResult(
+      idTransaction: data['idTransaction'] as String,
+      status: data['status'] as String,
+      amount: data['amount'] as int,
+      paymentToken: json['payment_token'] as String?,
+      paymentLink: json['payment_link'] as String?,
+    );
+  }
+}
+
+/// Result of checking payment status via the payment-check endpoint.
+class PaymentCheckResult {
+  final String status; // "pending" | "paid" | "expired" | "cancelled", dst.
+
+  PaymentCheckResult({required this.status});
+
+  factory PaymentCheckResult.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? json;
+    return PaymentCheckResult(status: data['status'] as String);
+  }
+}
 
 class TransactionService {
+  final http.Client _client;
+
+  TransactionService({http.Client? client}) : _client = client ?? http.Client();
+
+  Uri _uri(String businessId, String path) =>
+      Uri.parse('https://wave-api.eon.id/waveup/$businessId$path');
+
+  Map<String, String> _headers(String accessToken) => {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $accessToken',
+  };
+
+  Map<String, dynamic> _decodeOrThrow(http.Response response) {
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      throw ApiException(
+        decoded['message']?.toString() ??
+            'Request failed (${response.statusCode})',
+        statusCode: response.statusCode,
+      );
+    }
+    return decoded;
+  }
+
+  /// GET list transaksi (dipakai oleh TransactionListNotifier).
+  /// TODO: sesuaikan path & parsing dengan TransactionListResponse project kamu
+  /// kalau field-nya berbeda dari asumsi berikut.
   Future<TransactionListResponse> getTransactions({
     required String accessToken,
     required String businessId,
-    String? storeLocationId,
-    String? customerId,
     int page = 1,
   }) async {
-    final queryParts = <String>[
-      'id_store_location=${Uri.encodeComponent(storeLocationId ?? '')}',
-      'id_customer=${Uri.encodeComponent(customerId ?? '')}',
-    ];
-    if (page > 1) {
-      queryParts.add('page=$page');
-    }
-
-    final fullUrl =
-        '${ApiConstants.transactionSales(businessId)}?${queryParts.join('&')}';
-    final uri = Uri.parse(fullUrl);
-
-    final formattedToken = accessToken.startsWith('Bearer ')
-        ? accessToken
-        : 'Bearer $accessToken';
-
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': ApiConstants.basicAuthCredential,
-      'Access-Token': formattedToken,
-    };
-
-    debugPrint('[TransactionService] GET URL: $uri');
-
-    http.Response response;
-    try {
-      response = await http.get(uri, headers: headers);
-      debugPrint('[TransactionService] STATUS: ${response.statusCode}');
-    } catch (e) {
-      throw ApiNetworkException(
-        'Gagal terhubung ke server saat ambil daftar transaksi: $e',
-      );
-    }
-
-    Map<String, dynamic> decoded;
-    try {
-      decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (e) {
-      throw ApiException(
-        'Response server tidak valid (bukan JSON). Status: ${response.statusCode}',
-        statusCode: response.statusCode,
-      );
-    }
-
-    if (response.statusCode != 200 || decoded['status'] != 200) {
-      throw ApiException(
-        decoded['message']?.toString() ?? 'Gagal mengambil daftar transaksi.',
-        statusCode: response.statusCode,
-      );
-    }
-
-    final result = TransactionListResponse.fromJson(decoded);
-    debugPrint(
-      '[TransactionService] Parsed: ${result.transactions.length} transaksi, '
-      'page=${result.page.currentPage}/${result.page.totalPages}',
-    );
-
-    return result;
+    final uri = _uri(
+      businessId,
+      '/transaction/sales',
+    ).replace(queryParameters: {'page': '$page'});
+    final response = await _client.get(uri, headers: _headers(accessToken));
+    final decoded = _decodeOrThrow(response);
+    return TransactionListResponse.fromJson(decoded);
   }
 
-  /// GET /waveup/{idBusiness}/transaction/sales/{idTransaction}/payment-check
-  /// Dipakai untuk halaman detail transaksi (klik salah satu item di list).
+  /// GET detail transaksi (dipakai oleh transactionDetailProvider).
+  /// TODO: sesuaikan path & parsing dengan TransactionDetailResponse project kamu.
   Future<TransactionDetailResponse> getTransactionDetail({
     required String accessToken,
     required String businessId,
     required String idTransaction,
   }) async {
-    final uri = Uri.parse(
-      ApiConstants.transactionPaymentCheck(businessId, idTransaction),
-    );
+    final uri = _uri(businessId, '/transaction/sales/$idTransaction');
+    final response = await _client.get(uri, headers: _headers(accessToken));
+    final decoded = _decodeOrThrow(response);
+    return TransactionDetailResponse.fromJson(decoded);
+  }
 
-    final formattedToken = accessToken.startsWith('Bearer ')
-        ? accessToken
-        : 'Bearer $accessToken';
-
-    final headers = {
-      'Content-Type': 'application/json',
-      'Authorization': ApiConstants.basicAuthCredential,
-      'Access-Token': formattedToken,
+  /// Buat transaksi penjualan (generik, semua payment_method).
+  Future<TransactionSaleResult> createSale({
+    required String accessToken,
+    required String businessId,
+    required String storeLocationId,
+    required List<SaleItemInput> items,
+    required PaymentMethod paymentMethod,
+    String? customerId,
+    int storeId = 0,
+    int discount = 0,
+    int shippingFee = 0,
+    String note = '',
+    String reference = '',
+  }) async {
+    final body = {
+      'store_location_id': storeLocationId,
+      'customer_id': customerId ?? '',
+      'store_id': storeId,
+      'discount': discount,
+      'shipping_fee': shippingFee,
+      'note': note,
+      'reference': reference,
+      'payment_method': paymentMethod.code,
+      'items': items.map((e) => e.toJson()).toList(),
     };
 
-    debugPrint('[TransactionService] DETAIL GET URL: $uri');
-
-    http.Response response;
-    try {
-      response = await http.get(uri, headers: headers);
-      debugPrint('[TransactionService] DETAIL STATUS: ${response.statusCode}');
-    } catch (e) {
-      throw ApiNetworkException(
-        'Gagal terhubung ke server saat ambil detail transaksi: $e',
-      );
-    }
-
-    Map<String, dynamic> decoded;
-    try {
-      decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (e) {
-      throw ApiException(
-        'Response server tidak valid (bukan JSON). Status: ${response.statusCode}',
-        statusCode: response.statusCode,
-      );
-    }
-
-    if (response.statusCode != 200 || decoded['status'] != 200) {
-      throw ApiException(
-        decoded['message']?.toString() ?? 'Gagal mengambil detail transaksi.',
-        statusCode: response.statusCode,
-      );
-    }
-
-    final result = TransactionDetailResponse.fromJson(decoded);
-    debugPrint(
-      '[TransactionService] DETAIL Parsed: idTransaction=${result.transaction.idTransaction}, '
-      'items=${result.transaction.items.length}, '
-      'paymentStatus=${result.paymentStatus?.statusMessage}',
+    final response = await _client.post(
+      _uri(businessId, '/transaction/sales'),
+      headers: _headers(accessToken),
+      body: jsonEncode(body),
     );
 
-    return result;
+    final decoded = _decodeOrThrow(response);
+    return TransactionSaleResult.fromJson(decoded);
+  }
+
+  /// Khusus QRIS (Midtrans, payment_method = 3).
+  /// customer_id selalu dikosongkan.
+  Future<TransactionSaleResult> createQrisSale({
+    required String accessToken,
+    required String businessId,
+    required String storeLocationId,
+    required List<SaleItemInput> items,
+    String note = '',
+    String reference = '',
+    int discount = 0,
+    int shippingFee = 0,
+  }) {
+    return createSale(
+      accessToken: accessToken,
+      businessId: businessId,
+      storeLocationId: storeLocationId,
+      items: items,
+      paymentMethod: PaymentMethod.midtransRegular,
+      customerId: '', // dikosongkan
+      note: note,
+      reference: reference,
+      discount: discount,
+      shippingFee: shippingFee,
+    );
+  }
+
+  /// Cek status pembayaran — dipakai untuk polling di halaman WebView QRIS.
+  /// Endpoint: /transaction/sales/{idTransaction}/payment-check
+  Future<PaymentCheckResult> checkPaymentStatus({
+    required String accessToken,
+    required String businessId,
+    required String idTransaction,
+  }) async {
+    final uri = _uri(
+      businessId,
+      '/transaction/sales/$idTransaction/payment-check',
+    );
+    final response = await _client.get(uri, headers: _headers(accessToken));
+    final decoded = _decodeOrThrow(response);
+    return PaymentCheckResult.fromJson(decoded);
   }
 }
