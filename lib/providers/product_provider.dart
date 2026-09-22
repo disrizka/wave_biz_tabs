@@ -211,8 +211,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           final flat = await _fetchFlatGroupedWithRetry();
           productsByCategoryName = flat.grouped;
           pageMeta = flat.page;
-        } catch (_) {
-        }
+        } catch (_) {}
 
         state = state.copyWith(
           isLoading: false,
@@ -255,8 +254,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           );
           productsByCategoryName = flat.grouped;
           pageMeta = flat.page;
-        } catch (_) {
-        }
+        } catch (_) {}
       }
 
       state = state.copyWith(
@@ -379,3 +377,70 @@ final productHomeProvider =
     NotifierProvider<ProductHomeNotifier, ProductHomeState>(
       ProductHomeNotifier.new,
     );
+
+/// Index lengkap SEMUA produk (bukan cuma halaman/kategori yang lagi
+/// ke-reveal di [productHomeProvider]), dikunci lewat idProduct, uuid, DAN
+/// uuid/id tiap SKU-nya.
+///
+/// Dipakai sebagai fallback di layar detail transaksi: endpoint
+/// payment-check cuma ngirim ProductID/product_id/product_sku_id, bukan
+/// nama produk, jadi nama aslinya (mis. "Burger") harus dicocokkan dari
+/// katalog produk. Kalau cuma pakai [productHomeProvider] (yang defaultnya
+/// cuma nge-reveal halaman pertama demi performa), produk yang ada di
+/// halaman belakang bisa gagal ke-match dan jatuh ke fallback
+/// "Produk #<id>". Provider ini nge-loop semua halaman sekali supaya
+/// pencocokan nama selalu akurat sesuai data API, bukan hardcode.
+///
+/// SKU juga diindex terpisah karena ID produk yang dikirim balik oleh
+/// endpoint transaksi (`ProductID`/`product_id`) kadang tidak match 1:1
+/// dengan `idProduct`/`uuid` di endpoint katalog produk — sementara
+/// `product_sku_id` yang dikirim saat checkout ([SaleItem.productSkuId])
+/// hampir selalu match dengan salah satu SKU produknya, jadi ini jalur
+/// pencocokan paling reliable kalau match by product ID gagal.
+final productLookupProvider = FutureProvider<Map<String, ProductModel>>((
+  ref,
+) async {
+  final auth = ref.watch(authProvider);
+  final token = auth.accessToken ?? '';
+  final businessId = auth.activeBusinessId ?? '';
+  if (token.isEmpty || businessId.isEmpty) return {};
+
+  final service = ProductService();
+  final Map<String, ProductModel> byKey = {};
+
+  var page = 1;
+  const maxPages = 25; // jaga-jaga, batas wajar biar gak looping tanpa henti
+  while (page <= maxPages) {
+    final ProductFlatResponse resp;
+    try {
+      resp = await service.getProductsFlat(
+        accessToken: token,
+        businessId: businessId,
+        page: page,
+        limit: 200,
+      );
+    } catch (_) {
+      break;
+    }
+
+    for (final p in resp.products) {
+      if (p.idProduct.isNotEmpty) byKey[p.idProduct] = p;
+      if (p.uuid.isNotEmpty) byKey[p.uuid] = p;
+      for (final s in p.skus) {
+        if (s.uuid.isNotEmpty) byKey[s.uuid] = p;
+        if (s.idProductSku.isNotEmpty) byKey[s.idProductSku] = p;
+      }
+    }
+
+    if (!resp.page.hasMorePages) break;
+    page++;
+  }
+
+  debugPrint(
+    '[productLookupProvider] selesai: ${byKey.length} key ke-index dari '
+    'katalog produk. Contoh key: '
+    '${byKey.keys.take(5).toList()}',
+  );
+
+  return byKey;
+});

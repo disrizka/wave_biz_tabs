@@ -12,21 +12,6 @@ const _kAccentDark = Color(0xFF00655F);
 const _kBg = Color(0xFFF6F7FB);
 const _kInk = Color(0xFF1F2430);
 
-/// Halaman detail transaksi. Panggil dari list transaksi via:
-///
-/// ```dart
-/// Navigator.of(context).push(
-///   MaterialPageRoute(
-///     builder: (_) => TransactionDetailScreen(
-///       idTransaction: transaction.idTransaction,
-///     ),
-///   ),
-/// );
-/// ```
-///
-/// Semua data ditarik langsung dari
-/// `.../transaction/sales/{idTransaction}/payment-check` lewat
-/// [transactionDetailProvider] — tidak ada nilai hardcode di sini.
 class TransactionDetailScreen extends ConsumerWidget {
   final String idTransaction;
 
@@ -555,11 +540,14 @@ class _ItemsContent extends ConsumerWidget {
   final TransactionModel transaction;
   const _ItemsContent({required this.transaction});
 
-  /// Cari produk asli dari katalog yang sudah ke-load di [productHomeProvider]
-  /// (dipakai juga oleh layar POS/produk), dicocokkan lewat UUID produk dulu
-  /// (paling unik), baru fallback ke idProduct numerik. Endpoint payment-check
-  /// sendiri tidak mengirim nama produk, jadi ini satu-satunya cara nampilin
-  /// nama asli tanpa nge-hardcode apa pun.
+  /// Cari produk asli dari katalog yang sudah ke-load, dicocokkan lewat UUID
+  /// produk dulu (paling unik), lalu idProduct numerik, dan TERAKHIR lewat
+  /// SKU (product_sku_id) — soalnya ID produk yang dibalikin endpoint
+  /// transaksi kadang beda skema sama endpoint katalog produk, sementara
+  /// SKU yang dipakai pas checkout ([SaleItem.productSkuId]) hampir selalu
+  /// match sama salah satu SKU produknya. Endpoint payment-check sendiri
+  /// tidak mengirim nama produk, jadi ini satu-satunya cara nampilin nama
+  /// asli tanpa nge-hardcode apa pun.
   ProductModel? _matchProduct(
     Iterable<ProductModel> catalog,
     TransactionItemModel item,
@@ -572,6 +560,13 @@ class _ItemsContent extends ConsumerWidget {
     final idStr = item.productId.toString();
     for (final p in catalog) {
       if (p.idProduct.isNotEmpty && p.idProduct == idStr) return p;
+    }
+    if (item.hasSku) {
+      for (final p in catalog) {
+        for (final s in p.skus) {
+          if (s.uuid == item.skuId || s.idProductSku == item.skuId) return p;
+        }
+      }
     }
     return null;
   }
@@ -596,11 +591,19 @@ class _ItemsContent extends ConsumerWidget {
       );
     }
 
-    final catalog = ref
+    // Katalog yang lagi ke-reveal di layar POS/produk (cepat, tapi cuma
+    // sebagian kalau produknya banyak / lagi difilter kategori tertentu).
+    final revealedCatalog = ref
         .watch(productHomeProvider)
         .productsByCategoryName
         .values
         .expand((e) => e);
+
+    // Fallback: index SEMUA produk + SKU-nya (semua halaman), dipakai kalau
+    // produk item ini tidak ketemu di katalog yang lagi ke-reveal, supaya
+    // nama asli tetap muncul sesuai API alih-alih "Produk #<id>".
+    final fullLookupAsync = ref.watch(productLookupProvider);
+    final fullLookup = fullLookupAsync.asData?.value ?? const {};
 
     return Column(
       children: [
@@ -608,7 +611,21 @@ class _ItemsContent extends ConsumerWidget {
           Builder(
             builder: (_) {
               final item = transaction.items[i];
-              final product = _matchProduct(catalog, item);
+              var product = _matchProduct(revealedCatalog, item);
+              product ??=
+                  fullLookup[item.productUuid] ??
+                  fullLookup[item.productId.toString()] ??
+                  fullLookup[item.skuId];
+              if (product == null) {
+                debugPrint(
+                  '[TransactionDetail] Produk TIDAK ketemu untuk item -> '
+                  'ProductID=${item.productId}, '
+                  'product_id(uuid)="${item.productUuid}", '
+                  'product_sku_id="${item.skuId}". '
+                  'revealedCatalog.length=${revealedCatalog.length}, '
+                  'fullLookup.length=${fullLookup.length}',
+                );
+              }
               final sku = _matchSku(product, item);
               return _ItemRow(item: item, product: product, sku: sku);
             },
