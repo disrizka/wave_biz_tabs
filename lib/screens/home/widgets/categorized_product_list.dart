@@ -25,9 +25,19 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
   final Map<String, GlobalKey> _sectionKeys = {};
   String? _activeCategory;
 
+  /// Below this many products in total, a separate "All Product" scroll-to-
+  /// top chip doesn't add much — the catalog is small enough that users can
+  /// just scroll, so the chip is hidden to keep the bar less cluttered.
+  static const _kMinProductsForAllChip = 200;
+
   List<String> get _names => widget.productsByCategoryName.keys
       .where((k) => (widget.productsByCategoryName[k] ?? const []).isNotEmpty)
       .toList();
+
+  int get _totalProductCount => widget.productsByCategoryName.values.fold(
+    0,
+    (sum, items) => sum + items.length,
+  );
 
   @override
   void initState() {
@@ -110,6 +120,7 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
   @override
   Widget build(BuildContext context) {
     final names = _names;
+    final showAllProductChip = _totalProductCount >= _kMinProductsForAllChip;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -120,17 +131,20 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 2),
             children: [
-              _SimpleChip(
-                label: 'All Product',
-                selected: _activeCategory == null,
-                onTap: _scrollToTop,
-              ),
-              for (final name in names) ...[
-                const SizedBox(width: 8),
+              if (showAllProductChip) ...[
                 _SimpleChip(
-                  label: name,
-                  selected: _activeCategory == name,
-                  onTap: () => _scrollToCategory(name),
+                  label: 'All Product',
+                  selected: _activeCategory == null,
+                  onTap: _scrollToTop,
+                ),
+                if (names.isNotEmpty) const SizedBox(width: 8),
+              ],
+              for (var i = 0; i < names.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                _SimpleChip(
+                  label: names[i],
+                  selected: _activeCategory == names[i],
+                  onTap: () => _scrollToCategory(names[i]),
                 ),
               ],
             ],
@@ -182,7 +196,11 @@ class _CategorizedProductListState extends State<CategorizedProductList> {
                                     crossAxisCount: widget.columns,
                                     mainAxisSpacing: 12,
                                     crossAxisSpacing: 12,
-                                    childAspectRatio: 0.62,
+                                    // See product_list_screen.dart's grid —
+                                    // ProductCard's image is Expanded now,
+                                    // so 0.66 just needs to leave enough
+                                    // room for the fixed text+button part.
+                                    childAspectRatio: 0.66,
                                   ),
                               delegate: SliverChildBuilderDelegate(
                                 (context, index) {

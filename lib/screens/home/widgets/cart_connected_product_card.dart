@@ -31,6 +31,7 @@ class CartConnectedProductCard extends ConsumerWidget {
             product,
             sku: picked.sku,
             quantity: picked.quantity,
+            note: picked.note,
           );
           if (!context.mounted) return;
           showCartSnackBar(

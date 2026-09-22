@@ -83,33 +83,43 @@ class ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Stack(
-            children: [
-              AspectRatio(aspectRatio: 1.3, child: _buildProductImage()),
-              if (product.isOutOfStock)
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade600,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'Out Of Stock',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
+          // Flexible on purpose: the grid cell's height is set by the grid
+          // delegate and can vary slightly by breakpoint/font scale. Letting
+          // the image fill whatever space is left (instead of a fixed
+          // AspectRatio) means the fixed text+button section below can
+          // never get pushed past the bottom of the cell (which caused a
+          // RenderFlex overflow before), and any extra room just makes the
+          // image a bit taller instead of leaving a dead gap under the
+          // button.
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(child: _buildProductImage()),
+                if (product.isOutOfStock)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Out Of Stock',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),

@@ -5,11 +5,11 @@ const _kAccent = Color(0xFF008080);
 const _kAccentTint = Color(0xFFE0F2F1);
 const _kAccentBorder = Color(0xFFB2DFDB);
 
-Future<({ProductSku sku, int quantity})?> showVariantPickerSheet(
+Future<({ProductSku sku, int quantity, String note})?> showVariantPickerSheet(
   BuildContext context,
   ProductModel product,
 ) {
-  return showModalBottomSheet<({ProductSku sku, int quantity})>(
+  return showModalBottomSheet<({ProductSku sku, int quantity, String note})>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.white,
@@ -32,7 +32,14 @@ class _VariantPickerSheet extends StatefulWidget {
 class _VariantPickerSheetState extends State<_VariantPickerSheet> {
   late final Map<String, List<String>> _groups = widget.product.variantGroups;
   final Map<String, String> _selection = {};
+  final _noteController = TextEditingController();
   int _quantity = 1;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
 
   ProductSku? get _matchedSku => widget.product.skuForSelection(_selection);
 
@@ -221,6 +228,51 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   ),
                 ),
                 Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Notes',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: Color(0xFF1F2430),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _noteController,
+                        maxLines: 2,
+                        style: const TextStyle(fontSize: 13.5),
+                        decoration: InputDecoration(
+                          hintText: 'Tambahkan catatan (opsional)',
+                          hintStyle: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 13,
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: _kAccent,
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   child: Row(
                     children: [
@@ -243,9 +295,11 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: _isComplete && _matchedSku != null
-                              ? () => Navigator.of(
-                                  context,
-                                ).pop((sku: _matchedSku!, quantity: _quantity))
+                              ? () => Navigator.of(context).pop((
+                                  sku: _matchedSku!,
+                                  quantity: _quantity,
+                                  note: _noteController.text.trim(),
+                                ))
                               : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _kAccent,

@@ -101,8 +101,18 @@ class CartNotifier extends Notifier<CartState> {
     _persistOrderType();
   }
 
-  void addProduct(ProductModel product, {ProductSku? sku, int quantity = 1}) {
-    final newItem = CartItem.fromProduct(product, sku: sku, quantity: quantity);
+  void addProduct(
+    ProductModel product, {
+    ProductSku? sku,
+    int quantity = 1,
+    String note = '',
+  }) {
+    final newItem = CartItem.fromProduct(
+      product,
+      sku: sku,
+      quantity: quantity,
+      note: note,
+    );
     final items = [...state.items];
     final index = items.indexWhere((i) => i.cartLineId == newItem.cartLineId);
     if (index == -1) {
@@ -110,6 +120,7 @@ class CartNotifier extends Notifier<CartState> {
     } else {
       items[index] = items[index].copyWith(
         quantity: items[index].quantity + quantity,
+        note: note.isNotEmpty ? note : null,
       );
     }
     state = state.copyWith(items: items);

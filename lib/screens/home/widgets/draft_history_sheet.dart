@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/snackbar_utils.dart';
-import 'package:wave_biz_tabs/models/cart_model.dart';
 import 'package:wave_biz_tabs/models/draft_order_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/providers/draft_provider.dart';
@@ -66,35 +65,37 @@ class _DraftHistoryDialog extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              drafts.isEmpty
-                  ? 'Belum ada pesanan yang disimpan'
-                  : '${drafts.length} pesanan tersimpan',
-              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
-            ),
+            if (!drafts.isEmpty)
+              Text(
+                '${drafts.length} pesanan tersimpan',
+                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
+              ),
             const SizedBox(height: 14),
             Flexible(
               child: drafts.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 36),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.receipt_long_outlined,
-                            size: 40,
-                            color: Colors.grey.shade300,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Draft yang kamu simpan akan\nmuncul di sini',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 13,
-                              height: 1.4,
+                  ? SizedBox(
+                      height: 260,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 40,
+                              color: Colors.grey.shade300,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 10),
+                            Text(
+                              'Tidak ada draft pesanan',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     )
                   : ListView.separated(
@@ -135,7 +136,9 @@ class _DraftHistoryDialog extends ConsumerWidget {
     ref
         .read(cartProvider.notifier)
         .restore(items: draft.items, orderType: draft.orderType);
-    await ref.read(draftProvider.notifier).removeDraft(draft.id);
+    // Note: the draft stays in history on purpose — loading/switching a
+    // draft into the order summary should not delete it. It only leaves
+    // the list when the user explicitly deletes it.
     if (!context.mounted) return;
     Navigator.of(context).pop();
     showCartSnackBar(
@@ -201,39 +204,6 @@ class _DraftCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2F1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        draft.orderType == OrderType.takeaway
-                            ? Icons.shopping_bag_outlined
-                            : Icons.restaurant_outlined,
-                        size: 11,
-                        color: _kAccent,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        draft.orderType == OrderType.takeaway
-                            ? 'Takeaway'
-                            : 'Dine in',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: _kAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const Spacer(),
                 Text(
                   _timeAgo(draft.savedAt),

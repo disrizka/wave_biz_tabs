@@ -45,6 +45,7 @@ class CartItem {
     ProductModel product, {
     ProductSku? sku,
     int quantity = 1,
+    String note = '',
   }) {
     return CartItem(
       productId: product.idProduct.isNotEmpty
@@ -54,6 +55,7 @@ class CartItem {
       unitPrice: sku?.price ?? product.basePrice,
       photoPath: product.photoPath,
       quantity: quantity,
+      note: note,
       skuUuid: sku?.uuid ?? '',
       skuId: sku?.idProductSku ?? '',
       variantLabel: sku?.label ?? '',

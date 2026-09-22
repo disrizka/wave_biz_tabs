@@ -1,4 +1,4 @@
-package com.example.wave_biz_tabs
+package com.wave.up.pos
 
 import io.flutter.embedding.android.FlutterActivity
 

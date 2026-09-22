@@ -95,6 +95,13 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
     final cart = ref.read(cartProvider);
     if (cart.isEmpty) return;
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _SaveDraftDialog(),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
     await ref
         .read(draftProvider.notifier)
         .saveDraft(items: cart.items, orderType: cart.orderType);
@@ -125,11 +132,6 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _OrderTypeToggle(
-            orderType: cart.orderType,
-            onChanged: notifier.setOrderType,
-          ),
-          const SizedBox(height: 18),
           Row(
             children: [
               const Expanded(
@@ -212,40 +214,6 @@ class _OrderSummaryPanelState extends ConsumerState<OrderSummaryPanel> {
                   const Text(
                     'Total',
                     style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
-                  ),
-                  const SizedBox(height: 3),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0F2F1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          cart.orderType == OrderType.takeaway
-                              ? Icons.shopping_bag_outlined
-                              : Icons.restaurant_outlined,
-                          size: 12,
-                          color: const Color(0xFF008080),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          cart.orderType == OrderType.takeaway
-                              ? 'Takeaway'
-                              : 'Dine in',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF008080),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -354,79 +322,6 @@ class _HeaderIconButton extends StatelessWidget {
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OrderTypeToggle extends StatelessWidget {
-  final OrderType orderType;
-  final ValueChanged<OrderType> onChanged;
-
-  const _OrderTypeToggle({required this.orderType, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F5F9),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ToggleTab(
-              label: 'Dine in',
-              selected: orderType == OrderType.dineIn,
-              onTap: () => onChanged(OrderType.dineIn),
-            ),
-          ),
-          Expanded(
-            child: _ToggleTab(
-              label: 'Takeaway',
-              selected: orderType == OrderType.takeaway,
-              onTap: () => onChanged(OrderType.takeaway),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToggleTab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ToggleTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF008080) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : Colors.grey.shade500,
-            fontWeight: FontWeight.w600,
-            fontSize: 13.5,
           ),
         ),
       ),
@@ -713,6 +608,107 @@ class _MiniStepperButton extends StatelessWidget {
         width: 26,
         height: 26,
         child: Icon(icon, size: 13, color: color),
+      ),
+    );
+  }
+}
+
+class _SaveDraftDialog extends StatelessWidget {
+  const _SaveDraftDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0F2F1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.bookmark_add_outlined,
+                color: _kAccent,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Simpan sebagai draft?',
+              style: TextStyle(
+                fontSize: 16.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1F2430),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pesanan yang sedang berjalan akan disimpan sebagai draft '
+              'dan keranjang akan dikosongkan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF6B7280),
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kAccent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Simpan',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
