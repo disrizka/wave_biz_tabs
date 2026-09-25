@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/screens/transaction/qris_payment_page.dart';
 
 import '../../providers/checkout_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../models/sale_request.dart';
-
 
 const _kAccent = Color(0xFF008080);
 
@@ -176,28 +174,21 @@ class _PaymentMethodDialog extends ConsumerWidget {
                             }
 
                             if (result.selectedMethod == PaymentMethod.qris) {
-                              // Transaksi sudah dibuat di backend (status
-                              // "pending"); buka WebView QRIS dan tunggu
-                              // hasil polling status pembayaran.
-                              final auth = ref.read(authProvider);
-                              Navigator.of(context).pop(); // tutup modal ini
+                              Navigator.of(context).pop(); 
                               final paid = await Navigator.of(context)
                                   .push<bool?>(
                                     MaterialPageRoute(
                                       builder: (_) => QrisPaymentPage(
-                                        paymentLink: result.paymentLink!,
+                                        paymentToken: result.paymentToken!,
                                         idTransaction: result.idTransaction!,
-                                        accessToken: auth.accessToken!,
-                                        businessId: auth.activeBusinessId!,
+                                        amount: result.amount,
                                       ),
                                     ),
                                   );
                               if (paid == true && context.mounted) {
                                 _showSuccessDialog(context);
                               }
-                              // paid == false / null: transaksi tetap
-                              // tercatat sebagai "pending"/gagal di list,
-                              // user bisa cek ulang statusnya dari sana.
+
                             } else {
                               Navigator.of(context).pop();
                               _showSuccessDialog(context);

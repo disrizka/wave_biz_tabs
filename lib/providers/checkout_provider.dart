@@ -14,18 +14,17 @@ class CheckoutState {
   final CheckoutStatus status;
   final PaymentMethod? selectedMethod;
   final String? errorMessage;
-
-  /// Terisi hanya untuk QRIS: link Snap Midtrans yang harus dibuka di WebView,
-  /// dan id transaksi yang baru dibuat (dipakai untuk polling status).
-  final String? paymentLink;
+  final String? paymentToken;
   final String? idTransaction;
+  final int? amount;
 
   const CheckoutState({
     this.status = CheckoutStatus.idle,
     this.selectedMethod,
     this.errorMessage,
-    this.paymentLink,
+    this.paymentToken,
     this.idTransaction,
+    this.amount,
   });
 
   CheckoutState copyWith({
@@ -33,15 +32,17 @@ class CheckoutState {
     PaymentMethod? selectedMethod,
     String? errorMessage,
     bool clearError = false,
-    String? paymentLink,
+    String? paymentToken,
     String? idTransaction,
+    int? amount,
   }) {
     return CheckoutState(
       status: status ?? this.status,
       selectedMethod: selectedMethod ?? this.selectedMethod,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-      paymentLink: paymentLink ?? this.paymentLink,
+      paymentToken: paymentToken ?? this.paymentToken,
       idTransaction: idTransaction ?? this.idTransaction,
+      amount: amount ?? this.amount,
     );
   }
 }
@@ -97,7 +98,6 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
 
     final reference = 'REF-${DateTime.now().millisecondsSinceEpoch}';
 
-    // QRIS (Midtrans) — pakai TransactionService supaya dapat payment_link.
     if (method == PaymentMethod.qris) {
       try {
         final result = await tx.TransactionService().createQrisSale(
@@ -121,8 +121,9 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
 
         state = state.copyWith(
           status: CheckoutStatus.success,
-          paymentLink: result.paymentLink,
+          paymentToken: result.paymentToken,
           idTransaction: result.idTransaction,
+          amount: result.amount,
         );
         ref.read(cartProvider.notifier).clear();
         ref.invalidate(transactionListProvider);
@@ -135,10 +136,9 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
       return;
     }
 
-    // Cash / Debit — flow lama lewat SaleService.
     final request = SaleRequest(
       storeLocationId: TransactionConstants.defaultStoreLocationId,
-      customerId: '', // dikosongkan
+      customerId: '',
       reference: reference,
       paymentMethod: method,
       items: cart.items

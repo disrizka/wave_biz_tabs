@@ -1,552 +1,406 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:wave_biz_tabs/services/transaction_service.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart';
 
+import '../../core/constants.dart';
+import '../../models/cart_model.dart' show formatIDR;
 
+const _kBg = Color(0xFFF4F6F8);
+const _kInk = Color(0xFF1C2230);
+const _kMuted = Color(0xFF8C93A3);
+const _kBorder = Color(0xFFE7EAF0);
 
-const _kAccent = Color(0xFF0F766E); // teal yang lebih dalam & elegan
-const _kAccentDark = Color(0xFF0B4F49);
-const _kAccentLight = Color(0xFFE6F4F2);
-const _kInk = Color(0xFF1F2430);
-const _kMuted = Color(0xFF8A94A6);
-const _kSurface = Color(0xFFF6F8F9);
+const _kSuccess = Color(0xFF14966B);
+const _kSuccessSoft = Color(0xFFE4F6EE);
+const _kDanger = Color(0xFFE0473F);
+const _kDangerSoft = Color(0xFFFCEAE9);
+const _kWarning = Color(0xFFC98A1E);
+const _kWarningSoft = Color(0xFFFCF2E1);
+const _kAccent = Color(0xFF11637F);
+const _kAccentSoft = Color(0xFFE7F1F4);
 
-/// Menampilkan payment_link (Midtrans Snap) di dalam WebView, sambil polling
-/// status pembayaran ke endpoint payment-check.
+/// Menjalankan pembayaran QRIS via SDK pembayaran native (bukan WebView),
+/// lalu SELALU menampilkan layar konfirmasi di dalam app sebelum kembali —
+/// jadi kasir tahu pasti transaksi berhasil, gagal, atau masih pending,
+/// bukan cuma balik diam-diam.
 ///
 /// Return value setelah di-pop:
-/// - true  -> pembayaran berhasil (status "paid"/"settlement")
-/// - false -> gagal / expired / cancelled
-/// - null  -> user menutup manual (belum tentu gagal, transaksi tetap ada)
+/// - true  -> pembayaran dikonfirmasi sukses (settlement/capture)
+/// - false -> gagal / ditolak / kedaluwarsa / dibatalkan
+/// - null  -> belum ada kepastian (pending) / user menutup manual
 class QrisPaymentPage extends StatefulWidget {
-  final String paymentLink;
+  /// Snap token dari response create-sale (`payment_token`). Ini yang
+  /// dipakai untuk membuka layar pembayaran.
+  final String paymentToken;
   final String idTransaction;
-  final String accessToken;
-  final String businessId;
+
+  /// Nominal transaksi (opsional) — buat ditampilkan di layar konfirmasi.
+  final int? amount;
 
   const QrisPaymentPage({
     super.key,
-    required this.paymentLink,
+    required this.paymentToken,
     required this.idTransaction,
-    required this.accessToken,
-    required this.businessId,
+    this.amount,
   });
 
   @override
   State<QrisPaymentPage> createState() => _QrisPaymentPageState();
 }
 
-enum _LoadState { loading, loaded, error, timeout }
+enum _FlowState {
+  initializing,
+  waitingPayment,
+  initError,
+  resultSuccess,
+  resultFailed,
+  resultPending,
+}
 
-class _QrisPaymentPageState extends State<QrisPaymentPage>
-    with SingleTickerProviderStateMixin {
-  final _service = TransactionService();
-  late final WebViewController _controller;
-  late final AnimationController _pulseController;
-  Timer? _pollTimer;
-  Timer? _timeoutTimer;
-  bool _finished = false;
-  _LoadState _loadState = _LoadState.loading;
-  double _progress = 0;
+class _QrisPaymentPageState extends State<QrisPaymentPage> {
+  MidtransSDK? _midtrans;
+  _FlowState _state = _FlowState.initializing;
   String? _errorDetail;
+  String? _resultMessage;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _initWebView();
-    _startPolling();
+    _startPaymentFlow();
   }
 
-  void _initWebView() {
-    _errorDetail = null;
-    setState(() => _loadState = _LoadState.loading);
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (progress) {
-            if (mounted) setState(() => _progress = progress / 100);
-          },
-          onPageStarted: (url) {
-            debugPrint('[QrisPaymentPage] onPageStarted: $url');
-            _resetTimeoutTimer();
-          },
-          onPageFinished: (url) {
-            debugPrint('[QrisPaymentPage] onPageFinished: $url');
-            _timeoutTimer?.cancel();
-            if (mounted) setState(() => _loadState = _LoadState.loaded);
-          },
-          onWebResourceError: (error) {
-            debugPrint(
-              '[QrisPaymentPage] WebResourceError: ${error.description} '
-              '(code ${error.errorCode}, type ${error.errorType})',
-            );
-            if (error.isForMainFrame ?? true) {
-              _timeoutTimer?.cancel();
-              if (mounted) {
-                setState(() {
-                  _loadState = _LoadState.error;
-                  _errorDetail = error.description;
-                });
-              }
-            }
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.paymentLink));
-
-    _resetTimeoutTimer();
-  }
-
-  void _resetTimeoutTimer() {
-    _timeoutTimer?.cancel();
-    _timeoutTimer = Timer(const Duration(seconds: 15), () {
-      if (mounted && _loadState == _LoadState.loading) {
-        setState(() => _loadState = _LoadState.timeout);
-      }
+  Future<void> _startPaymentFlow() async {
+    setState(() {
+      _state = _FlowState.initializing;
+      _errorDetail = null;
     });
-  }
 
-  void _startPolling() {
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      if (_finished) return;
-      try {
-        final result = await _service.checkPaymentStatus(
-          accessToken: widget.accessToken,
-          businessId: widget.businessId,
-          idTransaction: widget.idTransaction,
-        );
-
-        final status = result.status.toLowerCase();
-        if (status == 'paid' || status == 'settlement') {
-          _finish(true);
-        } else if (status == 'expired' ||
-            status == 'expire' ||
-            status == 'cancelled' ||
-            status == 'cancel') {
-          _finish(false);
-        }
-      } catch (e) {
-        debugPrint('[QrisPaymentPage] Poll status error: $e');
-      }
-    });
-  }
-
-  Future<void> _openInBrowser() async {
-    final uri = Uri.parse(widget.paymentLink);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: _kInk,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+    try {
+      _midtrans = await MidtransSDK.init(
+        config: MidtransConfig(
+          clientKey: MidtransConstants.clientKey,
+          merchantBaseUrl: MidtransConstants.merchantBaseUrl,
+          colorTheme: ColorTheme(
+            colorPrimary: _kAccent,
+            colorPrimaryDark: _kInk,
+            colorSecondary: _kAccent,
           ),
-          content: const Text('Tidak bisa membuka browser eksternal.'),
         ),
       );
+
+      _midtrans?.setTransactionFinishedCallback(_onTransactionFinished);
+
+      if (!mounted) return;
+      setState(() => _state = _FlowState.waitingPayment);
+
+      await _midtrans?.startPaymentUiFlow(token: widget.paymentToken);
+    } catch (e) {
+      debugPrint('[QrisPaymentPage] init/flow error: $e');
+      if (mounted) {
+        setState(() {
+          _state = _FlowState.initError;
+          _errorDetail = e.toString();
+        });
+      }
     }
   }
 
-  void _finish(bool? paid) {
-    if (_finished || !mounted) return;
-    _finished = true;
-    _pollTimer?.cancel();
-    _timeoutTimer?.cancel();
+  /// Callback ini datang LANGSUNG dari layanan pembayaran — sumber
+  /// kebenaran status QRIS, bukan asumsi kita sendiri.
+  void _onTransactionFinished(TransactionResult result) {
+    debugPrint(
+      '[QrisPaymentPage] finished -> status: ${result.status}, '
+      'message: ${result.message}, transactionId: ${result.transactionId}, '
+      'paymentType: ${result.paymentType}',
+    );
+
+    if (!mounted) return;
+
+    switch (result.status.toLowerCase()) {
+      case 'settlement':
+      case 'capture':
+        setState(() {
+          _state = _FlowState.resultSuccess;
+          _resultMessage = result.message;
+        });
+        break;
+      case 'deny':
+      case 'expire':
+      case 'cancel':
+        setState(() {
+          _state = _FlowState.resultFailed;
+          _resultMessage = result.message;
+        });
+        break;
+      default:
+        // 'pending' atau status lain yang belum final (mis. user menutup
+        // layar pembayaran sebelum menyelesaikannya).
+        setState(() {
+          _state = _FlowState.resultPending;
+          _resultMessage = result.message;
+        });
+    }
+
+    _midtrans?.removeTransactionFinishedCallback();
+  }
+
+  void _closeWith(bool? paid) {
+    if (!mounted) return;
     Navigator.of(context).pop(paid);
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
-    _timeoutTimer?.cancel();
-    _pulseController.dispose();
+    _midtrans?.removeTransactionFinishedCallback();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kSurface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: _buildContentCard(),
+    return PopScope(
+      canPop: _isResultState,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeWith(null);
+      },
+      child: Scaffold(
+        backgroundColor: _kBg,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _buildBody(),
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 16, 18),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_kAccentDark, _kAccent],
-        ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white),
-            onPressed: () => _finish(null),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pembayaran QRIS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    _StatusDot(
-                      color: Colors.white,
-                      pulse: _pulseController,
-                      active: _loadState != _LoadState.error,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _statusLabel,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  bool get _isResultState =>
+      _state == _FlowState.resultSuccess ||
+      _state == _FlowState.resultFailed ||
+      _state == _FlowState.resultPending;
 
-  String get _statusLabel {
-    switch (_loadState) {
-      case _LoadState.loading:
-        return 'Menyiapkan halaman…';
-      case _LoadState.loaded:
-        return 'Menunggu pembayaran';
-      case _LoadState.timeout:
-        return 'Koneksi lambat';
-      case _LoadState.error:
-        return 'Gagal memuat';
+  Widget _buildBody() {
+    switch (_state) {
+      case _FlowState.initializing:
+      case _FlowState.waitingPayment:
+        return _StatusCard(
+          key: const ValueKey('loading'),
+          iconBg: _kAccentSoft,
+          icon: const Padding(
+            padding: EdgeInsets.all(4),
+            child: CircularProgressIndicator(color: _kAccent, strokeWidth: 2.6),
+          ),
+          title: _state == _FlowState.initializing
+              ? 'Menyiapkan pembayaran'
+              : 'Menunggu pembayaran QRIS',
+          subtitle: 'Mohon tunggu sebentar…',
+        );
+      case _FlowState.initError:
+        return _StatusCard(
+          key: const ValueKey('error'),
+          iconBg: _kDangerSoft,
+          icon: Icon(Icons.wifi_off_rounded, size: 30, color: _kDanger),
+          title: 'Gagal membuka pembayaran',
+          subtitle: _errorDetail ?? 'Terjadi kesalahan, coba lagi.',
+          primaryLabel: 'Coba Lagi',
+          onPrimary: _startPaymentFlow,
+          secondaryLabel: 'Tutup',
+          onSecondary: () => _closeWith(null),
+        );
+      case _FlowState.resultSuccess:
+        return _StatusCard(
+          key: const ValueKey('success'),
+          iconBg: _kSuccessSoft,
+          icon: const Icon(Icons.check_rounded, size: 34, color: _kSuccess),
+          title: 'Pembayaran Berhasil',
+          subtitle: widget.amount != null
+              ? 'Total ${formatIDR(widget.amount!)} telah diterima.'
+              : 'Pembayaran QRIS telah diterima.',
+          badgeLabel: 'ID: ${widget.idTransaction}',
+          primaryLabel: 'Selesai',
+          primaryColor: _kSuccess,
+          onPrimary: () => _closeWith(true),
+        );
+      case _FlowState.resultFailed:
+        return _StatusCard(
+          key: const ValueKey('failed'),
+          iconBg: _kDangerSoft,
+          icon: const Icon(Icons.close_rounded, size: 34, color: _kDanger),
+          title: 'Pembayaran Gagal',
+          subtitle: _resultMessage?.isNotEmpty == true
+              ? _resultMessage!
+              : 'Transaksi ditolak, kedaluwarsa, atau dibatalkan.',
+          primaryLabel: 'Tutup',
+          primaryColor: _kDanger,
+          onPrimary: () => _closeWith(false),
+        );
+      case _FlowState.resultPending:
+        return _StatusCard(
+          key: const ValueKey('pending'),
+          iconBg: _kWarningSoft,
+          icon: const Icon(
+            Icons.access_time_rounded,
+            size: 30,
+            color: _kWarning,
+          ),
+          title: 'Belum Ada Konfirmasi',
+          subtitle:
+              'Status pembayaran belum final. Cek ulang statusnya di daftar '
+              'transaksi beberapa saat lagi.',
+          primaryLabel: 'Tutup',
+          primaryColor: _kWarning,
+          onPrimary: () => _closeWith(null),
+        );
     }
   }
+}
 
-  Widget _buildContentCard() {
+class _StatusCard extends StatelessWidget {
+  final Color iconBg;
+  final Widget icon;
+  final String title;
+  final String subtitle;
+  final String? badgeLabel;
+  final String? primaryLabel;
+  final Color primaryColor;
+  final VoidCallback? onPrimary;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
+
+  const _StatusCard({
+    super.key,
+    required this.iconBg,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.badgeLabel,
+    this.primaryLabel,
+    this.primaryColor = _kAccent,
+    this.onPrimary,
+    this.secondaryLabel,
+    this.onSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-            color: _kInk.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: _kInk.withOpacity(0.06),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          if (_loadState == _LoadState.loading)
-            LinearProgressIndicator(
-              value: _progress == 0 ? null : _progress,
-              minHeight: 3,
-              backgroundColor: _kAccentLight,
-              valueColor: const AlwaysStoppedAnimation(_kAccent),
-            )
-          else
-            const SizedBox(height: 3),
-          Expanded(
-            child: Stack(
-              children: [
-                Offstage(
-                  offstage: _loadState == _LoadState.error,
-                  child: WebViewWidget(controller: _controller),
-                ),
-                if (_loadState == _LoadState.loading) _buildLoadingOverlay(),
-                if (_loadState == _LoadState.timeout) _buildTimeoutOverlay(),
-                if (_loadState == _LoadState.error) _buildErrorOverlay(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadingOverlay() {
-    return Container(
-      color: Colors.white,
-      alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(
-              color: _kAccentLight,
-              shape: BoxShape.circle,
+            width: 76,
+            height: 76,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+            child: icon,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: _kInk,
+              letterSpacing: 0.1,
             ),
-            child: const Padding(
-              padding: EdgeInsets.all(18),
-              child: CircularProgressIndicator(
-                color: _kAccent,
-                strokeWidth: 2.5,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13.5, color: _kMuted, height: 1.5),
+          ),
+          if (badgeLabel != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _kBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _kBorder),
+              ),
+              child: Text(
+                badgeLabel!,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: _kMuted,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 22),
-          const Text(
-            'Menyiapkan halaman pembayaran',
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Mohon tunggu sebentar…',
-            style: TextStyle(fontSize: 12.5, color: _kMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeoutOverlay() {
-    return Container(
-      color: Colors.white,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 36),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.hourglass_bottom_rounded,
-              size: 30,
-              color: Colors.orange.shade600,
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Halaman pembayaran lama terbuka',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Koneksi mungkin lambat, atau halaman ini perlu dibuka di browser. '
-            'Status pembayaran tetap dicek otomatis di latar belakang.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12.5, color: _kMuted, height: 1.4),
-          ),
-          const SizedBox(height: 24),
-          _ElevatedActionButton(
-            label: 'Tunggu Lagi',
-            icon: Icons.refresh_rounded,
-            onPressed: () {
-              setState(() => _loadState = _LoadState.loading);
-              _resetTimeoutTimer();
-            },
-          ),
-          const SizedBox(height: 10),
-          _OutlinedActionButton(
-            label: 'Buka di Browser',
-            icon: Icons.open_in_new_rounded,
-            onPressed: _openInBrowser,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorOverlay() {
-    return Container(
-      color: Colors.white,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 36),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.error_outline_rounded,
-              size: 30,
-              color: Colors.red.shade400,
-            ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Gagal memuat halaman pembayaran',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _kInk,
-            ),
-          ),
-          if (_errorDetail != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _errorDetail!,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: _kMuted, height: 1.4),
+          ],
+          if (primaryLabel != null) ...[
+            const SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: onPrimary,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  primaryLabel!,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
           ],
-          const SizedBox(height: 24),
-          _ElevatedActionButton(
-            label: 'Coba Lagi',
-            icon: Icons.refresh_rounded,
-            onPressed: _initWebView,
-          ),
-          const SizedBox(height: 10),
-          _OutlinedActionButton(
-            label: 'Buka di Browser',
-            icon: Icons.open_in_new_rounded,
-            onPressed: _openInBrowser,
-          ),
+          if (secondaryLabel != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton(
+                onPressed: onSecondary,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kMuted,
+                  side: const BorderSide(color: _kBorder, width: 1.3),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  secondaryLabel!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
-      ),
-    );
-  }
-}
-
-class _StatusDot extends AnimatedWidget {
-  final Color color;
-  final bool active;
-
-  const _StatusDot({
-    required this.color,
-    required AnimationController pulse,
-    required this.active,
-  }) : super(listenable: pulse);
-
-  @override
-  Widget build(BuildContext context) {
-    final t = (listenable as AnimationController).value;
-    final opacity = active ? 0.4 + (t * 0.6) : 1.0;
-    return Container(
-      width: 7,
-      height: 7,
-      decoration: BoxDecoration(
-        color: color.withOpacity(opacity),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _ElevatedActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  const _ElevatedActionButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _kAccent,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlinedActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  const _OutlinedActionButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: _kAccent,
-          side: const BorderSide(color: _kAccent, width: 1.3),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
       ),
     );
   }

@@ -1,16 +1,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
 import 'package:wave_biz_tabs/core/constants.dart';
 import 'package:wave_biz_tabs/models/transaction_model.dart';
-import 'package:wave_biz_tabs/services/api_service.dart'; // sumber ApiException
+import 'package:wave_biz_tabs/services/api_service.dart'; 
 
-/// Payment methods as defined by the Wave API.
 enum PaymentMethod {
   cash(1, 'Tunai'),
-  midtransDebit(2, 'Midtrans Debit'), // tidak dipakai / not used
+  midtransDebit(2, 'Midtrans Debit'), 
   midtransRegular(3, 'Midtrans Biasa (QRIS / Snap)'),
-  edc(4, 'EDC'), // perlu input nomor kartu pelanggan tambahan
+  edc(4, 'EDC'), 
   tt(5, 'TT'),
   shopee(6, 'Shopee');
 
@@ -71,9 +69,8 @@ class TransactionSaleResult {
   }
 }
 
-/// Result of checking payment status via the payment-check endpoint.
 class PaymentCheckResult {
-  final String status; // "pending" | "paid" | "expired" | "cancelled", dst.
+  final String status; 
 
   PaymentCheckResult({required this.status});
 
@@ -111,7 +108,6 @@ class TransactionService {
     return decoded;
   }
 
-  /// GET list transaksi (dipakai oleh TransactionListNotifier).
   Future<TransactionListResponse> getTransactions({
     required String accessToken,
     required String businessId,
@@ -125,11 +121,6 @@ class TransactionService {
     return TransactionListResponse.fromJson(decoded);
   }
 
-  /// GET detail transaksi + status pembayaran (dipakai oleh
-  /// transactionDetailProvider dan polling QRIS).
-  /// Endpoint: /transaction/sales/{idTransaction}/payment-check — ini satu-satunya
-  /// endpoint detail yang tersedia; responsenya sudah berisi `data` (transaksi)
-  /// dan `payment_status` sekaligus, sesuai TransactionDetailResponse.
   Future<TransactionDetailResponse> getTransactionDetail({
     required String accessToken,
     required String businessId,
@@ -143,7 +134,6 @@ class TransactionService {
     return TransactionDetailResponse.fromJson(decoded);
   }
 
-  /// Buat transaksi penjualan (generik, semua payment_method).
   Future<TransactionSaleResult> createSale({
     required String accessToken,
     required String businessId,
@@ -179,8 +169,6 @@ class TransactionService {
     return TransactionSaleResult.fromJson(decoded);
   }
 
-  /// Khusus QRIS (Midtrans, payment_method = 3).
-  /// customer_id selalu dikosongkan.
   Future<TransactionSaleResult> createQrisSale({
     required String accessToken,
     required String businessId,
@@ -197,7 +185,7 @@ class TransactionService {
       storeLocationId: storeLocationId,
       items: items,
       paymentMethod: PaymentMethod.midtransRegular,
-      customerId: '', // dikosongkan
+      customerId: '',
       note: note,
       reference: reference,
       discount: discount,
@@ -205,9 +193,6 @@ class TransactionService {
     );
   }
 
-  /// Cek status pembayaran — dipakai untuk polling di halaman WebView QRIS.
-  /// Baca status dari field `data.status` pada response payment-check
-  /// (mis. "pending", "paid", "expired").
   Future<PaymentCheckResult> checkPaymentStatus({
     required String accessToken,
     required String businessId,
