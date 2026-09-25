@@ -6,6 +6,7 @@ import 'package:wave_biz_tabs/models/auth_response_model.dart';
 import 'package:wave_biz_tabs/models/business_model.dart';
 import 'package:wave_biz_tabs/models/user_model.dart';
 import 'package:wave_biz_tabs/services/api_service.dart';
+// import 'package:wave_biz_tabs/services/fcm_service.dart'; // uncomment bareng kode FCM di bawah
 import 'package:wave_biz_tabs/services/token_storage_service.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
@@ -117,8 +118,29 @@ class AuthNotifier extends Notifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final result = await _api.login(username: username, password: password);
+      // NONAKTIF DULU bareng main.dart -- Firebase belum dikonfigurasi.
+      // Uncomment 2 baris ini kalau google-services.json /
+      // GoogleService-Info.plist sudah dipasang (lihat FCM_SETUP.md).
+      // final fcmToken = await FcmService.instance.getToken();
+      final fcmToken = null;
+
+      final result = await _api.login(
+        username: username,
+        password: password,
+        fcmToken: fcmToken,
+      );
       await _applySuccessfulLogin(result);
+
+      // Setelah login sukses, pastikan setiap kali token FCM berubah
+      // (refresh) kita bisa kirim ulang ke backend lewat endpoint yang
+      // sesuai (mis. /user/update-fcm-token) kalau backend menyediakannya.
+      // FcmService.instance.onTokenRefreshed = (newToken) {
+      //   debugPrint('[AuthNotifier] FCM token baru: $newToken');
+      //   // TODO: panggil API update-fcm-token di sini kalau backend
+      //   // sudah menyediakan endpoint-nya, contoh:
+      //   // _api.updateFcmToken(accessToken: state.accessToken, fcmToken: newToken);
+      // };
+
       return true;
     } on ApiNetworkException catch (e) {
       debugPrint('[AuthNotifier] Network error saat login: $e');
@@ -196,6 +218,8 @@ class AuthNotifier extends Notifier<AuthState> {
   Future<void> logout() async {
     _refreshTimer?.cancel();
     await _storage.clearSession();
+    // NONAKTIF DULU bareng main.dart -- Firebase belum dikonfigurasi.
+    // await FcmService.instance.deleteToken();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }
 }
