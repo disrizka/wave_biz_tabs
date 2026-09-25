@@ -296,16 +296,14 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTakeaway = transaction.orderType == TransactionOrderType.takeaway;
-    final initials = transaction.customer.name.trim().isNotEmpty
-        ? transaction.customer.name.trim()[0].toUpperCase()
-        : '?';
+    final customerName = transaction.customer.name.trim();
+    final hasName = customerName.isNotEmpty;
 
     return InkWell(
       onTap: () => _openDetail(context),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: const Color(0xFFF9FAFC),
           borderRadius: BorderRadius.circular(16),
@@ -314,107 +312,88 @@ class _TransactionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header row: order number (+ copy) on the left, total payment
+            // pinned to the right. Keeping both halves vertically centered
+            // and closing the gap between label/value in each half is what
+            // makes this read as one tidy row instead of two floating bits.
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE0F2F1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isTakeaway
-                                  ? Icons.shopping_bag_outlined
-                                  : Icons.restaurant_outlined,
-                              size: 11,
-                              color: _kAccent,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              transaction.orderTypeLabel,
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: _kAccent,
-                              ),
-                            ),
-                          ],
+                      Flexible(
+                        child: Text(
+                          'No. ${transaction.number}',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Order number: ${transaction.number}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
+                      InkWell(
+                        onTap: () => _copyOrderNumber(context),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Icon(
+                            Icons.copy_rounded,
+                            size: 13,
+                            color: Colors.grey.shade400,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                InkWell(
-                  onTap: () => _copyOrderNumber(context),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.copy_rounded,
-                      size: 15,
-                      color: Colors.grey.shade400,
-                    ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Total  ',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      TextSpan(
+                        text: transaction.formattedAmount,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F2430),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 4),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Total payment',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      transaction.formattedAmount,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1F2430),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Divider(height: 1, color: Colors.grey.shade200),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
                 CircleAvatar(
                   radius: 14,
                   backgroundColor: _kAccent.withOpacity(0.12),
-                  child: Text(
-                    initials,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _kAccent,
-                    ),
-                  ),
+                  child: hasName
+                      ? Text(
+                          customerName[0].toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: _kAccent,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.person_rounded,
+                          size: 15,
+                          color: _kAccent,
+                        ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -422,9 +401,7 @@ class _TransactionCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        transaction.customer.name.isNotEmpty
-                            ? transaction.customer.name
-                            : 'Pelanggan',
+                        hasName ? customerName : 'Pelanggan',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/services/sale_api_service.dart';
+import 'package:wave_biz_tabs/services/transaction_service.dart' as tx;
 
 import '../core/constants.dart';
 import '../models/sale_request.dart';
@@ -14,10 +15,17 @@ class CheckoutState {
   final PaymentMethod? selectedMethod;
   final String? errorMessage;
 
+  /// Terisi hanya untuk QRIS: link Snap Midtrans yang harus dibuka di WebView,
+  /// dan id transaksi yang baru dibuat (dipakai untuk polling status).
+  final String? paymentLink;
+  final String? idTransaction;
+
   const CheckoutState({
     this.status = CheckoutStatus.idle,
     this.selectedMethod,
     this.errorMessage,
+    this.paymentLink,
+    this.idTransaction,
   });
 
   CheckoutState copyWith({
@@ -25,11 +33,15 @@ class CheckoutState {
     PaymentMethod? selectedMethod,
     String? errorMessage,
     bool clearError = false,
+    String? paymentLink,
+    String? idTransaction,
   }) {
     return CheckoutState(
       status: status ?? this.status,
       selectedMethod: selectedMethod ?? this.selectedMethod,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      paymentLink: paymentLink ?? this.paymentLink,
+      idTransaction: idTransaction ?? this.idTransaction,
     );
   }
 }
@@ -61,15 +73,6 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
       return;
     }
 
-    if (method == PaymentMethod.qris) {
-      state = state.copyWith(
-        status: CheckoutStatus.error,
-        errorMessage:
-            'Pembayaran QRIS belum tersedia (menunggu integrasi Midtrans)',
-      );
-      return;
-    }
-
     final cart = ref.read(cartProvider);
     if (cart.isEmpty) {
       state = state.copyWith(
@@ -92,10 +95,51 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
 
     state = state.copyWith(status: CheckoutStatus.loading, clearError: true);
 
+    final reference = 'REF-${DateTime.now().millisecondsSinceEpoch}';
+
+    // QRIS (Midtrans) — pakai TransactionService supaya dapat payment_link.
+    if (method == PaymentMethod.qris) {
+      try {
+        final result = await tx.TransactionService().createQrisSale(
+          accessToken: accessToken,
+          businessId: businessId,
+          storeLocationId: TransactionConstants.defaultStoreLocationId,
+          reference: reference,
+          items: cart.items
+              .map(
+                (item) => tx.SaleItemInput(
+                  productId: item.productId,
+                  productSkuId: item.skuId.isNotEmpty
+                      ? item.skuId
+                      : item.productId,
+                  qty: item.quantity,
+                  price: item.unitPrice,
+                ),
+              )
+              .toList(),
+        );
+
+        state = state.copyWith(
+          status: CheckoutStatus.success,
+          paymentLink: result.paymentLink,
+          idTransaction: result.idTransaction,
+        );
+        ref.read(cartProvider.notifier).clear();
+        ref.invalidate(transactionListProvider);
+      } catch (e) {
+        state = state.copyWith(
+          status: CheckoutStatus.error,
+          errorMessage: e.toString(),
+        );
+      }
+      return;
+    }
+
+    // Cash / Debit — flow lama lewat SaleService.
     final request = SaleRequest(
       storeLocationId: TransactionConstants.defaultStoreLocationId,
-      customerId: TransactionConstants.defaultCustomerId,
-      reference: 'REF-${DateTime.now().millisecondsSinceEpoch}',
+      customerId: '', // dikosongkan
+      reference: reference,
       paymentMethod: method,
       items: cart.items
           .map(

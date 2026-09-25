@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'package:wave_biz_tabs/core/constants.dart';
 import 'package:wave_biz_tabs/models/transaction_model.dart';
 import 'package:wave_biz_tabs/services/api_service.dart'; // sumber ApiException
 
@@ -87,13 +88,16 @@ class TransactionService {
 
   TransactionService({http.Client? client}) : _client = client ?? http.Client();
 
-  Uri _uri(String businessId, String path) =>
-      Uri.parse('https://wave-api.eon.id/waveup/$businessId$path');
-
-  Map<String, String> _headers(String accessToken) => {
-    'Content-Type': 'application/json',
-    'Authorization': 'Bearer $accessToken',
-  };
+  Map<String, String> _headers(String accessToken) {
+    final formattedToken = accessToken.startsWith('Bearer ')
+        ? accessToken
+        : 'Bearer $accessToken';
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': ApiConstants.basicAuthCredential,
+      'Access-Token': formattedToken,
+    };
+  }
 
   Map<String, dynamic> _decodeOrThrow(http.Response response) {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -108,30 +112,32 @@ class TransactionService {
   }
 
   /// GET list transaksi (dipakai oleh TransactionListNotifier).
-  /// TODO: sesuaikan path & parsing dengan TransactionListResponse project kamu
-  /// kalau field-nya berbeda dari asumsi berikut.
   Future<TransactionListResponse> getTransactions({
     required String accessToken,
     required String businessId,
     int page = 1,
   }) async {
-    final uri = _uri(
-      businessId,
-      '/transaction/sales',
+    final uri = Uri.parse(
+      ApiConstants.transactionSales(businessId),
     ).replace(queryParameters: {'page': '$page'});
     final response = await _client.get(uri, headers: _headers(accessToken));
     final decoded = _decodeOrThrow(response);
     return TransactionListResponse.fromJson(decoded);
   }
 
-  /// GET detail transaksi (dipakai oleh transactionDetailProvider).
-  /// TODO: sesuaikan path & parsing dengan TransactionDetailResponse project kamu.
+  /// GET detail transaksi + status pembayaran (dipakai oleh
+  /// transactionDetailProvider dan polling QRIS).
+  /// Endpoint: /transaction/sales/{idTransaction}/payment-check — ini satu-satunya
+  /// endpoint detail yang tersedia; responsenya sudah berisi `data` (transaksi)
+  /// dan `payment_status` sekaligus, sesuai TransactionDetailResponse.
   Future<TransactionDetailResponse> getTransactionDetail({
     required String accessToken,
     required String businessId,
     required String idTransaction,
   }) async {
-    final uri = _uri(businessId, '/transaction/sales/$idTransaction');
+    final uri = Uri.parse(
+      ApiConstants.transactionPaymentCheck(businessId, idTransaction),
+    );
     final response = await _client.get(uri, headers: _headers(accessToken));
     final decoded = _decodeOrThrow(response);
     return TransactionDetailResponse.fromJson(decoded);
@@ -164,7 +170,7 @@ class TransactionService {
     };
 
     final response = await _client.post(
-      _uri(businessId, '/transaction/sales'),
+      Uri.parse(ApiConstants.transactionSales(businessId)),
       headers: _headers(accessToken),
       body: jsonEncode(body),
     );
@@ -200,18 +206,18 @@ class TransactionService {
   }
 
   /// Cek status pembayaran — dipakai untuk polling di halaman WebView QRIS.
-  /// Endpoint: /transaction/sales/{idTransaction}/payment-check
+  /// Baca status dari field `data.status` pada response payment-check
+  /// (mis. "pending", "paid", "expired").
   Future<PaymentCheckResult> checkPaymentStatus({
     required String accessToken,
     required String businessId,
     required String idTransaction,
   }) async {
-    final uri = _uri(
-      businessId,
-      '/transaction/sales/$idTransaction/payment-check',
+    final detail = await getTransactionDetail(
+      accessToken: accessToken,
+      businessId: businessId,
+      idTransaction: idTransaction,
     );
-    final response = await _client.get(uri, headers: _headers(accessToken));
-    final decoded = _decodeOrThrow(response);
-    return PaymentCheckResult.fromJson(decoded);
+    return PaymentCheckResult(status: detail.transaction.status);
   }
 }

@@ -86,7 +86,7 @@ class _DraftHistoryDialog extends ConsumerWidget {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              'Tidak ada draft pesanan',
+                              'No order drafts',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.grey.shade400,
