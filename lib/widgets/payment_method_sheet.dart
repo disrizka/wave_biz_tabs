@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/screens/transaction/qris_payment_page.dart';
 
 import '../../providers/checkout_provider.dart';
+import '../../models/receipt_model.dart';
 import '../../models/sale_request.dart';
+import '../../services/receipt_printer_service.dart';
 
 const _kAccent = Color(0xFF008080);
 
@@ -173,8 +175,10 @@ class _PaymentMethodDialog extends ConsumerWidget {
                               return;
                             }
 
+                            final receipt = result.receipt;
+
                             if (result.selectedMethod == PaymentMethod.qris) {
-                              Navigator.of(context).pop(); 
+                              Navigator.of(context).pop();
                               final paid = await Navigator.of(context)
                                   .push<bool?>(
                                     MaterialPageRoute(
@@ -186,12 +190,11 @@ class _PaymentMethodDialog extends ConsumerWidget {
                                     ),
                                   );
                               if (paid == true && context.mounted) {
-                                _showSuccessDialog(context);
+                                _showSuccessDialog(context, receipt);
                               }
-
                             } else {
                               Navigator.of(context).pop();
-                              _showSuccessDialog(context);
+                              _showSuccessDialog(context, receipt);
                             }
                           },
                     child: checkout.status == CheckoutStatus.loading
@@ -280,11 +283,87 @@ class _PaymentOptionCard extends ConsumerWidget {
   }
 }
 
-void _showSuccessDialog(BuildContext context) {
+void _showSuccessDialog(BuildContext context, ReceiptData? receipt) {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (dialogContext) => Dialog(
+    builder: (dialogContext) => _SuccessDialog(receipt: receipt),
+  );
+}
+
+enum _PrintUiState { idle, printing, done, error, noPrinter }
+
+/// Dialog sukses. Otomatis mencetak struk kalau printer sudah diatur dan
+/// "Cetak otomatis" aktif; tombol "Cetak Struk" bisa dipakai cetak ulang.
+class _SuccessDialog extends StatefulWidget {
+  final ReceiptData? receipt;
+  const _SuccessDialog({required this.receipt});
+
+  @override
+  State<_SuccessDialog> createState() => _SuccessDialogState();
+}
+
+class _SuccessDialogState extends State<_SuccessDialog> {
+  _PrintUiState _state = _PrintUiState.idle;
+  String _message = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final config = await ReceiptPrinterService.instance.loadConfig();
+    if (!mounted) return;
+    if (!config.hasPrinter) {
+      setState(() => _state = _PrintUiState.noPrinter);
+      return;
+    }
+    if (config.autoPrint) {
+      await _print();
+    }
+  }
+
+  Future<void> _print() async {
+    final receipt = widget.receipt;
+    if (receipt == null) return;
+    setState(() {
+      _state = _PrintUiState.printing;
+      _message = 'Mencetak struk...';
+    });
+    final result = await ReceiptPrinterService.instance.printReceipt(receipt);
+    if (!mounted) return;
+    setState(() {
+      _state = result.ok ? _PrintUiState.done : _PrintUiState.error;
+      _message = result.message;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final printing = _state == _PrintUiState.printing;
+    final hasReceipt = widget.receipt != null;
+
+    Color statusColor = Colors.grey.shade500;
+    if (_state == _PrintUiState.done) statusColor = _kAccent;
+    if (_state == _PrintUiState.error) statusColor = Colors.red.shade400;
+
+    String? statusText;
+    switch (_state) {
+      case _PrintUiState.printing:
+      case _PrintUiState.done:
+      case _PrintUiState.error:
+        statusText = _message;
+      case _PrintUiState.noPrinter:
+        statusText =
+            'Printer belum diatur. Atur di Profil > Printer Struk untuk '
+            'mencetak struk.';
+      case _PrintUiState.idle:
+        statusText = null;
+    }
+
+    return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 32),
       child: Container(
@@ -333,7 +412,63 @@ void _showSuccessDialog(BuildContext context) {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
+            if (statusText != null) ...[
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (printing)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _kAccent,
+                        ),
+                      ),
+                    ),
+                  Flexible(
+                    child: Text(
+                      statusText,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 22),
+            if (hasReceipt && _state != _PrintUiState.noPrinter) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kAccent,
+                    side: const BorderSide(color: _kAccent),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: printing ? null : _print,
+                  icon: const Icon(Icons.print_rounded, size: 18),
+                  label: Text(
+                    _state == _PrintUiState.done ||
+                            _state == _PrintUiState.error
+                        ? 'Cetak Ulang Struk'
+                        : 'Cetak Struk',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -345,7 +480,7 @@ void _showSuccessDialog(BuildContext context) {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () => Navigator.of(dialogContext).pop(),
+                onPressed: printing ? null : () => Navigator.of(context).pop(),
                 child: const Text(
                   "Okay",
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
@@ -355,6 +490,6 @@ void _showSuccessDialog(BuildContext context) {
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }

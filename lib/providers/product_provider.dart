@@ -7,6 +7,11 @@ import 'package:wave_biz_tabs/services/product_service.dart';
 
 const int kPageRevealBatch = 20;
 
+/// Kalau total produk lebih dari angka ini, search TIDAK lagi difilter lokal
+/// per ketikan, tapi diambil dari API (`/product/pos?search=...`) setelah
+/// user menekan Enter / tombol search.
+const int kServerSearchThreshold = 200;
+
 class ProductHomeState {
   final bool isLoading;
   final String? error;
@@ -20,6 +25,15 @@ class ProductHomeState {
   final int backendPage;
   final bool loadingMore;
 
+  // ---- Server-side search (dipakai kalau produk > kServerSearchThreshold) ----
+  /// Keyword yang sudah di-submit (Enter / klik tombol search).
+  final String submittedSearch;
+  final List<ProductModel> searchResults;
+  final ProductPageMeta? searchMeta;
+  final int searchPage;
+  final bool isSearchLoading;
+  final String? searchError;
+
   const ProductHomeState({
     this.isLoading = true,
     this.error,
@@ -32,7 +46,21 @@ class ProductHomeState {
     this.pageMeta,
     this.backendPage = 1,
     this.loadingMore = false,
+    this.submittedSearch = '',
+    this.searchResults = const [],
+    this.searchMeta,
+    this.searchPage = 1,
+    this.isSearchLoading = false,
+    this.searchError,
   });
+
+  /// True kalau katalog besar (> 200 produk) sehingga search harus ke API.
+  ///
+  /// Mode kategori (allProducts == false): list lokal cuma berisi satu
+  /// kategori, jadi search SELALU ke API (`/product/pos?search=...`) agar
+  /// menjangkau seluruh katalog.
+  bool get usesServerSearch =>
+      !allProducts || (pageMeta?.totalRows ?? 0) > kServerSearchThreshold;
 
   String? _categoryNameOf(String? idProductCategory) {
     if (idProductCategory == null) return null;
@@ -51,6 +79,10 @@ class ProductHomeState {
   }
 
   List<ProductModel> get visibleProducts {
+    // Katalog besar: hasil search = bagian "products" dari response API.
+    if (usesServerSearch && submittedSearch.trim().isNotEmpty) {
+      return searchResults;
+    }
     final full = _activeFullList;
     if (search.trim().isEmpty) {
       return full.take(revealCount).toList();
@@ -59,7 +91,14 @@ class ProductHomeState {
     return full.where((p) => p.name.toLowerCase().contains(q)).toList();
   }
 
-  bool get isSearching => search.trim().isNotEmpty;
+  bool get isSearching => usesServerSearch
+      ? submittedSearch.trim().isNotEmpty
+      : search.trim().isNotEmpty;
+
+  bool get canFetchMoreSearch =>
+      usesServerSearch &&
+      submittedSearch.trim().isNotEmpty &&
+      (searchMeta?.hasMorePages ?? false);
 
   bool get canRevealMoreLocally =>
       !isSearching && revealCount < _activeFullList.length;
@@ -81,6 +120,14 @@ class ProductHomeState {
     ProductPageMeta? pageMeta,
     int? backendPage,
     bool? loadingMore,
+    String? submittedSearch,
+    List<ProductModel>? searchResults,
+    ProductPageMeta? searchMeta,
+    bool clearSearchMeta = false,
+    int? searchPage,
+    bool? isSearchLoading,
+    String? searchError,
+    bool clearSearchError = false,
   }) {
     return ProductHomeState(
       isLoading: isLoading ?? this.isLoading,
@@ -97,6 +144,12 @@ class ProductHomeState {
       pageMeta: pageMeta ?? this.pageMeta,
       backendPage: backendPage ?? this.backendPage,
       loadingMore: loadingMore ?? this.loadingMore,
+      submittedSearch: submittedSearch ?? this.submittedSearch,
+      searchResults: searchResults ?? this.searchResults,
+      searchMeta: clearSearchMeta ? null : (searchMeta ?? this.searchMeta),
+      searchPage: searchPage ?? this.searchPage,
+      isSearchLoading: isSearchLoading ?? this.isSearchLoading,
+      searchError: clearSearchError ? null : (searchError ?? this.searchError),
     );
   }
 }
@@ -122,6 +175,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
 
   Future<ProductPosResponse> _fetchWithRetry({
     String? categoryId,
+    String? search,
     int page = 1,
     int maxRetries = 1,
   }) async {
@@ -135,6 +189,7 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
           accessToken: token,
           businessId: bId,
           categoryId: categoryId,
+          search: search,
           page: page,
         );
       } on ApiException catch (e) {
@@ -285,6 +340,10 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
         clearSelectedCategory: categoryId == null,
         revealCount: kPageRevealBatch,
         search: '',
+        submittedSearch: '',
+        searchResults: const [],
+        clearSearchMeta: true,
+        clearSearchError: true,
       );
       return;
     }
@@ -315,6 +374,10 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       state = state.copyWith(
         selectedCategoryId: categoryId,
         search: '',
+        submittedSearch: '',
+        searchResults: const [],
+        clearSearchMeta: true,
+        clearSearchError: true,
         revealCount: kPageRevealBatch,
       );
       return;
@@ -325,6 +388,10 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       clearError: true,
       selectedCategoryId: categoryId,
       search: '',
+      submittedSearch: '',
+      searchResults: const [],
+      clearSearchMeta: true,
+      clearSearchError: true,
       revealCount: kPageRevealBatch,
     );
     try {
@@ -358,12 +425,98 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
     }
   }
 
+  int _searchSeq = 0;
+
+  /// Dipanggil tiap ketikan (onChanged).
+  /// - Produk <= 200: filter lokal langsung (perilaku lama).
+  /// - Produk  > 200: hanya simpan teks, TIDAK request. Request baru jalan
+  ///   saat [submitSearch] (Enter / klik tombol search).
   void search(String query) {
+    if (state.usesServerSearch && query.trim().isEmpty) {
+      clearSearch();
+      return;
+    }
     state = state.copyWith(search: query);
+  }
+
+  /// Dipanggil saat user tekan Enter / klik tombol search.
+  Future<void> submitSearch(String query) async {
+    final q = query.trim();
+
+    if (!state.usesServerSearch) {
+      state = state.copyWith(search: query);
+      return;
+    }
+    if (q.isEmpty) {
+      clearSearch();
+      return;
+    }
+
+    final seq = ++_searchSeq;
+    state = state.copyWith(
+      search: query,
+      submittedSearch: q,
+      searchResults: const [],
+      clearSearchMeta: true,
+      clearSearchError: true,
+      searchPage: 1,
+      isSearchLoading: true,
+    );
+
+    try {
+      // Sengaja tanpa categoryId: sama seperti request
+      // /product/pos?category=&brand=&search=masker (cari di semua kategori).
+      final resp = await _fetchWithRetry(search: q);
+      if (seq != _searchSeq) return; // ada search yang lebih baru
+      state = state.copyWith(
+        isSearchLoading: false,
+        searchResults: resp.flatProducts, // = data.products
+        searchMeta: resp.page,
+        searchPage: 1,
+      );
+    } catch (e) {
+      if (seq != _searchSeq) return;
+      state = state.copyWith(isSearchLoading: false, searchError: '$e');
+    }
+  }
+
+  void clearSearch() {
+    _searchSeq++; // batalkan request search yang masih jalan
+    state = state.copyWith(
+      search: '',
+      submittedSearch: '',
+      searchResults: const [],
+      clearSearchMeta: true,
+      clearSearchError: true,
+      searchPage: 1,
+      isSearchLoading: false,
+    );
   }
 
   Future<void> loadMore() async {
     if (state.loadingMore) return;
+
+    if (state.canFetchMoreSearch) {
+      final seq = _searchSeq;
+      state = state.copyWith(loadingMore: true);
+      try {
+        final nextPage = state.searchPage + 1;
+        final resp = await _fetchWithRetry(
+          search: state.submittedSearch,
+          page: nextPage,
+        );
+        if (seq != _searchSeq) return;
+        state = state.copyWith(
+          searchResults: [...state.searchResults, ...resp.flatProducts],
+          searchMeta: resp.page,
+          searchPage: nextPage,
+          loadingMore: false,
+        );
+      } catch (_) {
+        if (seq == _searchSeq) state = state.copyWith(loadingMore: false);
+      }
+      return;
+    }
 
     if (state.canRevealMoreLocally) {
       state = state.copyWith(revealCount: state.revealCount + kPageRevealBatch);
@@ -426,107 +579,65 @@ final productHomeProvider =
 /// `product_sku_id` yang dikirim saat checkout ([SaleItem.productSkuId])
 /// hampir selalu match dengan salah satu SKU produknya, jadi ini jalur
 /// pencocokan paling reliable kalau match by product ID gagal.
-final productLookupProvider =
-    FutureProvider.autoDispose<Map<String, ProductModel>>((ref) async {
-      final auth = ref.watch(authProvider);
-      final token = auth.accessToken ?? '';
-      final businessId = auth.activeBusinessId ?? '';
-      if (token.isEmpty || businessId.isEmpty) return {};
+final productLookupProvider = FutureProvider<Map<String, ProductModel>>((
+  ref,
+) async {
+  final auth = ref.watch(authProvider);
+  final token = auth.accessToken ?? '';
+  final businessId = auth.activeBusinessId ?? '';
+  if (token.isEmpty || businessId.isEmpty) return {};
 
-      final service = ProductService();
-      final Map<String, ProductModel> byKey = {};
+  final service = ProductService();
+  final Map<String, ProductModel> byKey = {};
 
-      var page = 1;
-      const maxPages =
-          60; // jaga-jaga, batas wajar biar gak looping tanpa henti
-      while (page <= maxPages) {
-        ProductFlatResponse? resp;
-        // Pakai limit default (50) seperti layar POS. Limit 200 sebelumnya bisa
-        // ditolak backend, dan error-nya ketelan -> lookup kosong -> nama produk
-        // jatuh ke "Produk #<id>".
-        for (var attempt = 0; attempt < 2 && resp == null; attempt++) {
-          try {
-            resp = await service.getProductsFlat(
-              accessToken: token,
-              businessId: businessId,
-              page: page,
-            );
-          } catch (e) {
-            debugPrint(
-              '[productLookupProvider] halaman $page gagal '
-              '(percobaan ${attempt + 1}): $e',
-            );
-            if (attempt == 0) {
-              await Future.delayed(const Duration(milliseconds: 600));
-            }
-          }
-        }
-
-        if (resp == null) {
-          // Halaman pertama gagal total -> lempar error supaya tidak di-cache
-          // sebagai "sukses kosong". Halaman berikutnya gagal -> pakai yang ada.
-          if (page == 1) {
-            throw Exception(
-              'Gagal memuat katalog produk untuk mencocokkan nama.',
-            );
-          }
-          break;
-        }
-
-        for (final p in resp.products) {
-          if (p.idProduct.isNotEmpty) byKey[p.idProduct] = p;
-          if (p.uuid.isNotEmpty) byKey[p.uuid] = p;
-          if (p.numericId > 0) byKey.putIfAbsent('pid:${p.numericId}', () => p);
-          for (final s in p.skus) {
-            if (s.uuid.isNotEmpty) byKey[s.uuid] = p;
-            if (s.idProductSku.isNotEmpty) byKey[s.idProductSku] = p;
-          }
-        }
-
-        if (!resp.page.hasMorePages) break;
-        page++;
-      }
-
-      debugPrint(
-        '[productLookupProvider] selesai: ${byKey.length} key ke-index dari '
-        'katalog produk. Contoh key: ${byKey.keys.take(5).toList()}',
+  var page = 1;
+  const maxPages = 25; // jaga-jaga, batas wajar biar gak looping tanpa henti
+  while (page <= maxPages) {
+    final ProductFlatResponse resp;
+    try {
+      resp = await service.getProductsFlat(
+        accessToken: token,
+        businessId: businessId,
+        page: page,
+        limit: 200,
       );
+    } catch (_) {
+      break;
+    }
 
-      return byKey;
-    });
-
-/// Detail produk untuk satu item transaksi, lewat
-/// `GET /waveup/{businessId}/product/{id}`.
-///
-/// [key] = "<product_id dari transaksi>|<ProductID numerik>". ID dicoba
-/// berurutan; yang pertama mengembalikan produk bernama dipakai. Ini jalur
-/// utama untuk menampilkan nama asli karena ID katalog (idProduct) berubah
-/// di tiap response sehingga tidak bisa dicocokkan dengan string equality.
-final productDetailProvider = FutureProvider.autoDispose
-    .family<ProductModel?, String>((ref, key) async {
-      final auth = ref.watch(authProvider);
-      final token = auth.accessToken ?? '';
-      final businessId = auth.activeBusinessId ?? '';
-      if (token.isEmpty || businessId.isEmpty) return null;
-
-      final candidates = key
-          .split('|')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty && e != '0')
-          .toList();
-
-      final service = ProductService();
-      for (final id in candidates) {
-        try {
-          final product = await service.getProductDetail(
-            accessToken: token,
-            businessId: businessId,
-            productId: id,
-          );
-          if (product != null && product.name.trim().isNotEmpty) return product;
-        } catch (e) {
-          debugPrint('[productDetailProvider] id="$id" gagal: $e');
-        }
+    for (final p in resp.products) {
+      if (p.idProduct.isNotEmpty) byKey[p.idProduct] = p;
+      if (p.uuid.isNotEmpty) byKey[p.uuid] = p;
+      for (final s in p.skus) {
+        if (s.uuid.isNotEmpty) byKey[s.uuid] = p;
+        if (s.idProductSku.isNotEmpty) byKey[s.idProductSku] = p;
       }
-      return null;
-    });
+    }
+
+    if (!resp.page.hasMorePages) break;
+    page++;
+  }
+
+  debugPrint(
+    '[productLookupProvider] selesai: ${byKey.length} key ke-index dari '
+    'katalog produk. Contoh key: '
+    '${byKey.keys.take(5).toList()}',
+  );
+
+  return byKey;
+});
+
+/// Detail produk untuk satu item transaksi. Key = "<productUuid>|<productId>".
+/// Dicocokkan dari [productLookupProvider] (katalog lengkap).
+final productDetailProvider = FutureProvider.family<ProductModel?, String>((
+  ref,
+  key,
+) async {
+  final lookup = await ref.watch(productLookupProvider.future);
+  for (final k in key.split('|')) {
+    if (k.isEmpty) continue;
+    final p = lookup[k];
+    if (p != null) return p;
+  }
+  return null;
+});

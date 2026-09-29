@@ -10,12 +10,17 @@ class CategoryChipRow extends StatefulWidget {
     required this.selectedCategoryId,
     required this.showAllChip,
     required this.onSelect,
+    this.forceHighlight = false,
   });
 
   final List<ProductCategoryModel> categories;
   final String? selectedCategoryId;
   final bool showAllChip;
   final ValueChanged<String?> onSelect;
+
+  /// Tombol kategori tetap hijau (aktif) walau belum ada kategori terpilih,
+  /// mis. saat mode search.
+  final bool forceHighlight;
 
   @override
   State<CategoryChipRow> createState() => _CategoryChipRowState();
@@ -140,7 +145,10 @@ class _CategoryChipRowState extends State<CategoryChipRow> {
             label: widget.selectedCategoryId != null
                 ? 'Kategori: $label'
                 : 'Kategori',
-            selected: widget.selectedCategoryId != null || _open,
+            selected:
+                widget.selectedCategoryId != null ||
+                widget.forceHighlight ||
+                _open,
             trailingIcon: _open
                 ? Icons.keyboard_arrow_up
                 : Icons.keyboard_arrow_down,

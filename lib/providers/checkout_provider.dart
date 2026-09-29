@@ -3,6 +3,8 @@ import 'package:wave_biz_tabs/services/sale_api_service.dart';
 import 'package:wave_biz_tabs/services/transaction_service.dart' as tx;
 
 import '../core/constants.dart';
+import '../models/cart_model.dart';
+import '../models/receipt_model.dart';
 import '../models/sale_request.dart';
 import 'auth_provider.dart';
 import 'card_provider.dart';
@@ -18,6 +20,10 @@ class CheckoutState {
   final String? idTransaction;
   final int? amount;
 
+  /// Snapshot struk dari transaksi yang baru berhasil dibuat (dibuat sebelum
+  /// keranjang dikosongkan), dipakai untuk mencetak struk.
+  final ReceiptData? receipt;
+
   const CheckoutState({
     this.status = CheckoutStatus.idle,
     this.selectedMethod,
@@ -25,6 +31,7 @@ class CheckoutState {
     this.paymentToken,
     this.idTransaction,
     this.amount,
+    this.receipt,
   });
 
   CheckoutState copyWith({
@@ -35,6 +42,7 @@ class CheckoutState {
     String? paymentToken,
     String? idTransaction,
     int? amount,
+    ReceiptData? receipt,
   }) {
     return CheckoutState(
       status: status ?? this.status,
@@ -43,6 +51,7 @@ class CheckoutState {
       paymentToken: paymentToken ?? this.paymentToken,
       idTransaction: idTransaction ?? this.idTransaction,
       amount: amount ?? this.amount,
+      receipt: receipt ?? this.receipt,
     );
   }
 }
@@ -54,6 +63,47 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
   CheckoutState build() {
     _service = SaleService();
     return const CheckoutState();
+  }
+
+  ReceiptData _buildReceipt({
+    required CartState cart,
+    required AuthState auth,
+    required PaymentMethod method,
+    required String reference,
+    String transactionId = '',
+  }) {
+    final user = auth.user;
+    final cashier = (user?.fullName.isNotEmpty ?? false)
+        ? user!.fullName
+        : (user?.username ?? '');
+
+    return ReceiptData(
+      businessName: auth.activeBusiness?.name ?? '',
+      cashierName: cashier,
+      reference: reference,
+      transactionId: transactionId,
+      dateTime: DateTime.now(),
+      orderTypeLabel: cart.orderType == OrderType.takeaway
+          ? 'Take Away'
+          : 'Dine In',
+      paymentMethodLabel: switch (method) {
+        PaymentMethod.cash => 'Tunai',
+        PaymentMethod.debit => 'Debit',
+        PaymentMethod.qris => 'QRIS',
+      },
+      items: cart.items
+          .map(
+            (i) => ReceiptItem(
+              name: i.name,
+              variantLabel: i.variantLabel,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              note: i.note,
+            ),
+          )
+          .toList(),
+      total: cart.totalAmount,
+    );
   }
 
   void selectMethod(PaymentMethod method) {
@@ -124,6 +174,13 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
           paymentToken: result.paymentToken,
           idTransaction: result.idTransaction,
           amount: result.amount,
+          receipt: _buildReceipt(
+            cart: cart,
+            auth: auth,
+            method: method,
+            reference: reference,
+            transactionId: result.idTransaction,
+          ),
         );
         ref.read(cartProvider.notifier).clear();
         ref.invalidate(transactionListProvider);
@@ -159,7 +216,15 @@ class CheckoutNotifier extends Notifier<CheckoutState> {
         accessToken: accessToken,
         request: request,
       );
-      state = state.copyWith(status: CheckoutStatus.success);
+      state = state.copyWith(
+        status: CheckoutStatus.success,
+        receipt: _buildReceipt(
+          cart: cart,
+          auth: auth,
+          method: method,
+          reference: reference,
+        ),
+      );
       ref.read(cartProvider.notifier).clear();
       ref.invalidate(transactionListProvider);
     } catch (e) {

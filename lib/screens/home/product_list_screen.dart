@@ -41,6 +41,13 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     }
   }
 
+  void _onCategorySelect(String? id) {
+    _searchController.clear();
+    final n = ref.read(productHomeProvider.notifier);
+    n.clearSearch();
+    n.selectCategory(id);
+  }
+
   int _gridColumns(BuildContext context) {
     if (Responsive.isDesktop(context)) return 5;
     if (Responsive.isTablet(context)) return 4;
@@ -48,16 +55,46 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
   }
 
   Widget _searchField(ProductHomeState state) {
+    final notifier = ref.read(productHomeProvider.notifier);
+    final serverMode = state.usesServerSearch;
     return TextField(
       controller: _searchController,
-      onChanged: ref.read(productHomeProvider.notifier).search,
+      textInputAction: TextInputAction.search,
+      onChanged: notifier.search,
+      onSubmitted: notifier.submitSearch, // Enter
+
       style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
       decoration: InputDecoration(
-        hintText: state.allProducts
-            ? 'Quick search product/menu...'
-            : 'Cari produk di kategori ini...',
+        hintText: serverMode
+            ? 'Cari produk, lalu tekan Enter...'
+            : (state.allProducts
+                  ? 'Quick search product/menu...'
+                  : 'Cari produk di kategori ini...'),
         hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13.5),
         prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey.shade500),
+        suffixIcon: serverMode
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      tooltip: 'Hapus',
+                      onPressed: () {
+                        _searchController.clear();
+                        notifier.clearSearch();
+                      },
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.search, size: 20),
+                    color: const Color(0xFF008080),
+                    tooltip: 'Cari',
+                    onPressed: () =>
+                        notifier.submitSearch(_searchController.text),
+                  ),
+                ],
+              )
+            : null,
         filled: true,
         fillColor: const Color(0xFFF4F5F9),
         isDense: true,
@@ -131,9 +168,12 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
             const SizedBox(height: 12),
             CategoryChipRow(
               categories: state.categories,
-              selectedCategoryId: state.selectedCategoryId,
+              selectedCategoryId: state.isSearching
+                  ? null // saat search: tampil default, bukan kategori lama
+                  : state.selectedCategoryId,
               showAllChip: state.allProducts,
-              onSelect: notifier.selectCategory,
+              onSelect: _onCategorySelect,
+              forceHighlight: state.isSearching,
             ),
           ],
         ],
@@ -147,9 +187,12 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
           Expanded(
             child: CategoryChipRow(
               categories: state.categories,
-              selectedCategoryId: state.selectedCategoryId,
+              selectedCategoryId: state.isSearching
+                  ? null // saat search: tampil default, bukan kategori lama
+                  : state.selectedCategoryId,
               showAllChip: state.allProducts,
-              onSelect: notifier.selectCategory,
+              onSelect: _onCategorySelect,
+              forceHighlight: state.isSearching,
             ),
           )
         else
@@ -170,7 +213,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
     return CustomScrollView(
       controller: _scrollController,
       slivers: [
-        if (state.isLoading && products.isEmpty)
+        if ((state.isLoading || state.isSearchLoading) && products.isEmpty)
           const SliverFillRemaining(
             child: Center(child: CircularProgressIndicator()),
           )
@@ -178,9 +221,10 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
           SliverFillRemaining(
             child: Center(
               child: Text(
-                state.isSearching
-                    ? 'Produk tidak ditemukan'
-                    : 'Belum ada produk',
+                state.searchError ??
+                    (state.isSearching
+                        ? 'Produk tidak ditemukan'
+                        : 'Belum ada produk'),
                 style: TextStyle(color: Colors.grey.shade500),
               ),
             ),
@@ -213,7 +257,8 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                 child: state.loadingMore
                     ? const CircularProgressIndicator()
                     : (state.canRevealMoreLocally ||
-                          state.canFetchMoreFromBackend)
+                          state.canFetchMoreFromBackend ||
+                          state.canFetchMoreSearch)
                     ? TextButton(
                         onPressed: notifier.loadMore,
                         child: const Text('Muat Lebih Banyak'),

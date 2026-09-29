@@ -20,14 +20,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<_NavItem> _tabs(bool cartHasItems) => [
     const _NavItem(icon: Icons.note_add_rounded, label: 'Produk'),
     _NavItem(
-      icon: Icons.receipt_long_outlined,
+      icon: Icons.description_outlined,
       label: 'Pesanan',
       hasBadge: cartHasItems,
     ),
-    const _NavItem(
-      icon: Icons.account_balance_wallet_outlined,
-      label: 'Transaksi',
-    ),
+    const _NavItem(icon: Icons.receipt_long_outlined, label: 'Transaksi'),
   ];
 
   void _openProfile() {
@@ -144,13 +141,14 @@ class _RailTabConfig {
 }
 
 // Versi tab (layar lebar / side rail) cuma nampilin tombol Produk & Transaksi.
-// Tombol Pesanan (index 1) sengaja disembunyikan di sini, dan icon-nya
-// "dipinjam" buat tombol Transaksi (index 2) biar tampilannya sesuai.
+// Tombol Pesanan (index 1) sengaja disembunyikan di sini.
+// Icon Transaksi (index 2) di mobile sekarang sudah receipt_long_outlined,
+// jadi di side rail dipakai langsung dari tabs[2] (tampilan tablet tetap sama).
 // Tombol tetap membuka halaman Transaksi seperti biasa saat ditekan.
 // Bottom nav di versi mobile TIDAK dipengaruhi oleh ini.
 List<_RailTabConfig> _railVisibleTabs(List<_NavItem> tabs) => [
   _RailTabConfig(index: 0, icon: tabs[0].icon, hasBadge: tabs[0].hasBadge),
-  _RailTabConfig(index: 2, icon: tabs[1].icon, hasBadge: tabs[2].hasBadge),
+  _RailTabConfig(index: 2, icon: tabs[2].icon, hasBadge: tabs[2].hasBadge),
 ];
 
 class _SideRail extends StatelessWidget {

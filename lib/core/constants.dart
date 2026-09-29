@@ -1,5 +1,6 @@
 class ApiConstants {
   static const String baseUrl = 'https://wave-api.eon.id';
+  // static const String baseUrl = 'https://api.wave.id';
   static const String login = '$baseUrl/user/login';
   static const String refreshToken = '$baseUrl/user/refresh-token';
   static const String basicAuthCredential =
