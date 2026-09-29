@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/snackbar_utils.dart';
+import 'package:wave_biz_tabs/models/cart_model.dart';
 import 'package:wave_biz_tabs/models/product_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/product_card.dart';
@@ -11,14 +12,23 @@ class CartConnectedProductCard extends ConsumerWidget {
 
   const CartConnectedProductCard({super.key, required this.product});
 
-  String get _id =>
-      product.idProduct.isNotEmpty ? product.idProduct : product.uuid;
+  String get _id => normalizeCartId(
+    product.idProduct.isNotEmpty ? product.idProduct : product.uuid,
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
     final cartNotifier = ref.read(cartProvider.notifier);
-    final qty = cart.quantityOf(_id);
+    // Dicocokkan longgar (bukan cuma satu ID persis) biar quantity tetap
+    // kebaca bener walau katalog produk baru aja di-fetch ulang (habis
+    // restart app / muat draft) dan ID dari server sedikit beda dari yang
+    // ke-simpen di cart waktu item ini pertama kali ditambahin.
+    final qty = cart.quantityOfProduct(product);
+    // ID baris cart yang BENERAN dipakai buat +/-/hapus: kalau ketemu baris
+    // yang match, pakai cartLineId aslinya itu (bukan _id versi baru),
+    // biar tombolnya ngenain baris yang tepat.
+    final resolvedId = cart.matchingItem(product)?.cartLineId ?? _id;
 
     return ProductCard(
       product: product,
@@ -51,7 +61,7 @@ class CartConnectedProductCard extends ConsumerWidget {
         );
       },
       onIncrement: () {
-        cartNotifier.increment(_id);
+        cartNotifier.increment(resolvedId);
         showCartSnackBar(
           context,
           message: '${product.name} ditambah (${qty + 1})',
@@ -60,7 +70,7 @@ class CartConnectedProductCard extends ConsumerWidget {
         );
       },
       onDecrement: () {
-        cartNotifier.decrement(_id);
+        cartNotifier.decrement(resolvedId);
         final remaining = qty - 1;
         if (remaining <= 0) {
           showCartSnackBar(
@@ -80,7 +90,7 @@ class CartConnectedProductCard extends ConsumerWidget {
       },
       onRemove: () {
         final removedQty = qty;
-        cartNotifier.removeItem(_id);
+        cartNotifier.removeItem(resolvedId);
         showCartSnackBar(
           context,
           message: '${product.name} dihapus dari pesanan (${removedQty}x)',

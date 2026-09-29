@@ -296,6 +296,30 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       return;
     }
 
+    // Kalau kategori ini udah pernah di-fetch sebelumnya (mis. user sempat
+    // pindah ke kategori lain buat cari produk, terus balik lagi), pakai
+    // data yang udah ke-cache di [productsByCategoryName] daripada fetch
+    // ulang ke server. Ini penting karena fetch ulang bakal bikin instance
+    // ProductModel yang baru, dan kalau ID yang dikembalikan server buat
+    // produk yang sama ternyata gak 100% identik antar-request, tampilan
+    // quantity di ProductCard (yang dicocokkan lewat ID ini ke cart) bisa
+    // "reset" ke 0 padahal item-nya masih ada di cart/order summary.
+    // Pindah kategori jadi juga lebih instan (gak nunggu loading) buat
+    // kategori yang udah pernah dibuka.
+    final fallbackName = state._categoryNameOf(categoryId);
+    final alreadyLoaded =
+        fallbackName != null &&
+        (state.productsByCategoryName[fallbackName]?.isNotEmpty ?? false);
+
+    if (alreadyLoaded) {
+      state = state.copyWith(
+        selectedCategoryId: categoryId,
+        search: '',
+        revealCount: kPageRevealBatch,
+      );
+      return;
+    }
+
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -304,15 +328,20 @@ class ProductHomeNotifier extends Notifier<ProductHomeState> {
       revealCount: kPageRevealBatch,
     );
     try {
-      final fallbackName = state._categoryNameOf(categoryId);
       final flat = await _fetchFlatGroupedWithRetry(
         categoryId: categoryId,
         fallbackCategoryName: fallbackName,
       );
 
+      // Merge ke map yang udah ada, jangan ditimpa total — biar kategori
+      // lain yang udah ke-load sebelumnya (dan produk yang udah ditambahin
+      // ke cart dari situ) tetap ada di state, gak ilang pas kita pindah ke
+      // kategori yang baru ini.
+      final merged = {...state.productsByCategoryName, ...flat.grouped};
+
       state = state.copyWith(
         isLoading: false,
-        productsByCategoryName: flat.grouped,
+        productsByCategoryName: merged,
         pageMeta: flat.page,
         backendPage: 1,
       );

@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/core/snackbar_utils.dart';
+import 'package:wave_biz_tabs/models/cart_model.dart';
 import 'package:wave_biz_tabs/models/draft_order_model.dart';
 import 'package:wave_biz_tabs/providers/card_provider.dart';
 import 'package:wave_biz_tabs/providers/draft_provider.dart';
+import 'package:wave_biz_tabs/providers/product_provider.dart';
 
 const _kAccent = Color(0xFF008080);
 
@@ -136,6 +139,7 @@ class _DraftHistoryDialog extends ConsumerWidget {
     ref
         .read(cartProvider.notifier)
         .restore(items: draft.items, orderType: draft.orderType);
+    if (kDebugMode) _logDraftMatchDiagnostic(ref, draft);
     // Note: the draft stays in history on purpose — loading/switching a
     // draft into the order summary should not delete it. It only leaves
     // the list when the user explicitly deletes it.
@@ -147,6 +151,53 @@ class _DraftHistoryDialog extends ConsumerWidget {
       icon: Icons.history_rounded,
       color: _kAccent,
     );
+  }
+
+  /// Debug-only: buat setiap item di draft ini, cek apakah productId-nya
+  /// (setelah dinormalisasi) ketemu di katalog produk yang lagi ke-load
+  /// sekarang. Kalau masih ada yang "MISMATCH" di log padahal produknya
+  /// jelas-jelas ada di daftar kategori, itu tandanya normalisasi ID yang
+  /// sekarang belum cukup dan kita butuh lihat nilai mentahnya persis buat
+  /// nemuin pola bedanya.
+  void _logDraftMatchDiagnostic(WidgetRef ref, DraftOrder draft) {
+    final catalog = ref
+        .read(productHomeProvider)
+        .productsByCategoryName
+        .values
+        .expand((e) => e)
+        .toList();
+    debugPrint(
+      '[DraftMatchDiagnostic] Draft "${draft.id}" punya ${draft.items.length} '
+      'item, katalog yang ke-load sekarang ada ${catalog.length} produk.',
+    );
+    for (final item in draft.items) {
+      final normalizedItemId = normalizeCartId(item.productId);
+      final match = catalog.where((p) {
+        final candidates = {
+          if (p.idProduct.isNotEmpty) normalizeCartId(p.idProduct),
+          if (p.uuid.isNotEmpty) normalizeCartId(p.uuid),
+          if (p.code.isNotEmpty) normalizeCartId(p.code),
+        };
+        return candidates.contains(normalizedItemId);
+      }).toList();
+      if (match.isEmpty) {
+        debugPrint(
+          '[DraftMatchDiagnostic] MISMATCH draft item "${item.name}" '
+          '-> productId mentah="${item.productId}" '
+          '(normalized="$normalizedItemId"). Nggak ketemu produk manapun '
+          'di katalog yang sekarang ke-load dengan idProduct/uuid/code yang '
+          'cocok.',
+        );
+      } else {
+        final p = match.first;
+        debugPrint(
+          '[DraftMatchDiagnostic] OK draft item "${item.name}" '
+          '-> productId mentah="${item.productId}" cocok dengan katalog '
+          '"${p.name}" (idProduct="${p.idProduct}", uuid="${p.uuid}", '
+          'code="${p.code}").',
+        );
+      }
+    }
   }
 
   Future<void> _confirmDeleteDraft(

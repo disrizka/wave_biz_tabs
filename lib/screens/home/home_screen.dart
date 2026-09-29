@@ -132,6 +132,27 @@ class _NavItem {
   });
 }
 
+class _RailTabConfig {
+  final int index;
+  final IconData icon;
+  final bool hasBadge;
+  const _RailTabConfig({
+    required this.index,
+    required this.icon,
+    this.hasBadge = false,
+  });
+}
+
+// Versi tab (layar lebar / side rail) cuma nampilin tombol Produk & Transaksi.
+// Tombol Pesanan (index 1) sengaja disembunyikan di sini, dan icon-nya
+// "dipinjam" buat tombol Transaksi (index 2) biar tampilannya sesuai.
+// Tombol tetap membuka halaman Transaksi seperti biasa saat ditekan.
+// Bottom nav di versi mobile TIDAK dipengaruhi oleh ini.
+List<_RailTabConfig> _railVisibleTabs(List<_NavItem> tabs) => [
+  _RailTabConfig(index: 0, icon: tabs[0].icon, hasBadge: tabs[0].hasBadge),
+  _RailTabConfig(index: 2, icon: tabs[1].icon, hasBadge: tabs[2].hasBadge),
+];
+
 class _SideRail extends StatelessWidget {
   const _SideRail({
     required this.tabs,
@@ -189,12 +210,12 @@ class _SideRail extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          for (var i = 0; i < tabs.length; i++) ...[
+          for (final t in _railVisibleTabs(tabs)) ...[
             _RailIcon(
-              icon: tabs[i].icon,
-              selected: i == selectedIndex,
-              hasBadge: tabs[i].hasBadge,
-              onTap: () => onSelectTab(i),
+              icon: t.icon,
+              selected: t.index == selectedIndex,
+              hasBadge: t.hasBadge,
+              onTap: () => onSelectTab(t.index),
             ),
             const SizedBox(height: 10),
           ],

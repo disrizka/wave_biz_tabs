@@ -13,6 +13,35 @@ String formatIDR(int amount) {
   return 'IDR $buffer';
 }
 
+/// Normalizes a product/uuid/code identifier before it's stored or compared.
+///
+/// Backend responses for the SAME product across DIFFERENT endpoints (or
+/// different requests to the same endpoint) have been observed to format an
+/// otherwise-identical ID slightly differently — e.g. a numeric ID that
+/// comes back as `123` (int) in one response and `123.0` (double) in
+/// another, which `.toString()`-based parsing turns into "123" vs "123.0",
+/// or with incidental leading/trailing whitespace, leading zeros, or
+/// different letter casing. Left as-is, these cosmetic differences make an
+/// exact string match fail even though it's the same product — which is
+/// exactly what causes the "quantity resets to 0" bug after the catalog
+/// gets re-fetched (app restart, pull-to-refresh, or loading a draft saved
+/// in an earlier session). Normalizing both sides before comparing fixes
+/// that without needing the backend IDs to be perfectly stable.
+String normalizeCartId(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return v;
+  final asNum = num.tryParse(v);
+  if (asNum != null) {
+    // Angka utuh (mis. "123", "123.0", "00123") disamain ke bentuk integer
+    // paling sederhana biar variasi format apa pun tetap ke-anggep sama.
+    if (asNum == asNum.roundToDouble() && asNum.isFinite) {
+      return asNum.toInt().toString();
+    }
+    return asNum.toString();
+  }
+  return v.toLowerCase();
+}
+
 class CartItem {
   final String productId;
   final String name;
@@ -48,9 +77,9 @@ class CartItem {
     String note = '',
   }) {
     return CartItem(
-      productId: product.idProduct.isNotEmpty
-          ? product.idProduct
-          : product.uuid,
+      productId: normalizeCartId(
+        product.idProduct.isNotEmpty ? product.idProduct : product.uuid,
+      ),
       name: product.name,
       unitPrice: sku?.price ?? product.basePrice,
       photoPath: product.photoPath,

@@ -22,9 +22,56 @@ class CartState {
   String get formattedTotal => formatIDR(totalAmount);
   bool get isEmpty => items.isEmpty;
   int quantityOf(String productId) {
+    final target = normalizeCartId(productId);
     return items
-        .where((i) => i.productId == productId)
+        .where((i) => normalizeCartId(i.productId) == target)
         .fold(0, (sum, i) => sum + i.quantity);
+  }
+
+  /// Semua ID yang mungkin dikenali buat produk ini: idProduct, uuid, dan
+  /// code — dinormalisasi lewat [normalizeCartId], dipakai buat pencocokan
+  /// yang "longgar" di bawah, ketimbang cuma ngandelin satu ID mentah aja.
+  static Set<String> _candidateIdsOf(ProductModel product) => {
+    if (product.idProduct.isNotEmpty) normalizeCartId(product.idProduct),
+    if (product.uuid.isNotEmpty) normalizeCartId(product.uuid),
+    if (product.code.isNotEmpty) normalizeCartId(product.code),
+  }..removeWhere((v) => v.isEmpty);
+
+  /// Total quantity produk ini di cart, dicocokkan longgar lewat
+  /// [_candidateIdsOf] (bukan cuma satu ID kayak [quantityOf]).
+  ///
+  /// Ini buat nutupin kasus: produk yang udah ke-add ke cart (productId
+  /// ke-simpen di situ), terus app di-restart, di-refresh, atau draft
+  /// di-muat ulang, dan katalog produk di-fetch ULANG dari server — kalau
+  /// ID yang dibalikin server buat produk yang sama ternyata nggak 100%
+  /// identik antar-request (mis. angka dikirim sebagai `123` di satu
+  /// endpoint dan `123.0` di endpoint lain, atau salah satu ngisi uuid yg
+  /// satu nggak), matching berbasis satu ID mentah doang bakal gagal dan
+  /// quantity-nya keliatan "reset" ke 0 di kartu produk padahal item-nya
+  /// masih ada di cart/order summary.
+  int quantityOfProduct(ProductModel product) {
+    final candidates = _candidateIdsOf(product);
+    if (candidates.isEmpty) return 0;
+    return items
+        .where((i) => candidates.contains(normalizeCartId(i.productId)))
+        .fold(0, (sum, i) => sum + i.quantity);
+  }
+
+  /// Cart line non-variant yang match produk ini lewat [_candidateIdsOf].
+  /// Dipakai buat nemuin cartLineId "asli" yang tersimpan di cart, biar
+  /// tombol +/-/hapus di kartu produk tetap ngenain baris yang benar
+  /// walaupun ID hasil fetch katalog yang sekarang beda dari yang
+  /// ke-simpen waktu item itu pertama kali ditambahin.
+  CartItem? matchingItem(ProductModel product) {
+    final candidates = _candidateIdsOf(product);
+    if (candidates.isEmpty) return null;
+    for (final item in items) {
+      if (item.skuUuid.isEmpty &&
+          candidates.contains(normalizeCartId(item.productId))) {
+        return item;
+      }
+    }
+    return null;
   }
 
   CartState copyWith({
@@ -114,7 +161,19 @@ class CartNotifier extends Notifier<CartState> {
       note: note,
     );
     final items = [...state.items];
-    final index = items.indexWhere((i) => i.cartLineId == newItem.cartLineId);
+
+    // Dicocokkan longgar (idProduct/uuid/code manapun yang match), bukan
+    // cuma cartLineId yang persis sama — biar produk yang udah ada di cart
+    // (mis. dari draft yang dimuat ulang, atau sebelum app di-restart)
+    // nggak dobel jadi baris baru cuma gara-gara katalog produk di-fetch
+    // ulang dan ID-nya kebetulan beda dikit dari yang ke-simpen.
+    final candidates = CartState._candidateIdsOf(product);
+    final index = items.indexWhere((i) {
+      if (i.skuUuid != newItem.skuUuid) return false;
+      if (i.cartLineId == newItem.cartLineId) return true;
+      return candidates.contains(normalizeCartId(i.productId));
+    });
+
     if (index == -1) {
       items.add(newItem);
     } else {
