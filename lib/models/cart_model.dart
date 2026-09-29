@@ -44,6 +44,12 @@ String normalizeCartId(String raw) {
 
 class CartItem {
   final String productId;
+
+  /// UUID produk. Berbeda dari [productId] (idProduct) yang di-encode ulang
+  /// backend di tiap response, UUID ini STABIL antar request/restart, jadi
+  /// dipakai sebagai kunci utama untuk mencocokkan item cart dengan kartu
+  /// produk di katalog.
+  final String productUuid;
   final String name;
   final int unitPrice;
   final String photoPath;
@@ -55,6 +61,7 @@ class CartItem {
 
   const CartItem({
     required this.productId,
+    this.productUuid = '',
     required this.name,
     required this.unitPrice,
     this.photoPath = '',
@@ -91,9 +98,15 @@ class CartItem {
     );
   }
 
-  CartItem copyWith({int? quantity, String? note}) {
+  CartItem copyWith({
+    int? quantity,
+    String? note,
+    String? productId,
+    String? productUuid,
+  }) {
     return CartItem(
-      productId: productId,
+      productId: productId ?? this.productId,
+      productUuid: productUuid ?? this.productUuid,
       name: name,
       unitPrice: unitPrice,
       photoPath: photoPath,
@@ -107,6 +120,7 @@ class CartItem {
 
   Map<String, dynamic> toJson() => {
     'productId': productId,
+    'productUuid': productUuid,
     'name': name,
     'unitPrice': unitPrice,
     'photoPath': photoPath,
@@ -120,6 +134,7 @@ class CartItem {
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
       productId: json['productId']?.toString() ?? '',
+      productUuid: json['productUuid']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       unitPrice: (json['unitPrice'] as num?)?.toInt() ?? 0,
       photoPath: json['photoPath']?.toString() ?? '',

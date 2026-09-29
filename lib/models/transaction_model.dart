@@ -14,6 +14,11 @@ class TransactionItemModel {
   final int price;
   final int discount;
 
+  /// Nama produk kalau backend mengirimnya langsung di item transaksi
+  /// (key bisa beda-beda: product_name, productName, name, atau nested
+  /// product.name). Kosong kalau tidak dikirim -> dicari dari katalog.
+  final String productName;
+
   const TransactionItemModel({
     required this.idTransactionItem,
     this.transactionReference = '',
@@ -24,6 +29,7 @@ class TransactionItemModel {
     this.qtyOut = 0,
     this.price = 0,
     this.discount = 0,
+    this.productName = '',
   });
 
   int get quantity => qtyOut - qtyIn;
@@ -32,8 +38,45 @@ class TransactionItemModel {
 
   int get lineTotal => price * (quantity == 0 ? 1 : quantity) - discount;
 
+  /// Cari nama produk di berbagai kemungkinan lokasi pada JSON item.
+  static String _extractProductName(Map<String, dynamic> json) {
+    String pick(dynamic v) => v is String ? v.trim() : '';
+
+    for (final key in const [
+      'product_name',
+      'productName',
+      'ProductName',
+      'name',
+      'item_name',
+    ]) {
+      final v = pick(json[key]);
+      if (v.isNotEmpty) return v;
+    }
+
+    for (final key in const [
+      'product',
+      'Product',
+      'product_sku',
+      'productSku',
+      'sku',
+    ]) {
+      final nested = json[key];
+      if (nested is Map) {
+        final v = pick(nested['name']);
+        if (v.isNotEmpty) return v;
+        final inner = nested['product'];
+        if (inner is Map) {
+          final v2 = pick(inner['name']);
+          if (v2.isNotEmpty) return v2;
+        }
+      }
+    }
+    return '';
+  }
+
   factory TransactionItemModel.fromJson(Map<String, dynamic> json) {
     return TransactionItemModel(
+      productName: _extractProductName(json),
       idTransactionItem: json['idTransactionItem']?.toString() ?? '',
       transactionReference: json['transaction_reference']?.toString() ?? '',
       productId: (json['ProductID'] as num?)?.toInt() ?? 0,

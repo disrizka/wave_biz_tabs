@@ -161,4 +161,70 @@ class ProductService {
 
     return result;
   }
+
+  /// GET /waveup/{businessId}/product/{productId} — detail satu produk.
+  ///
+  /// ID di response katalog (idProduct / idProductSku) di-encode ulang oleh
+  /// backend di setiap response, jadi TIDAK bisa dicocokkan lewat string
+  /// equality dengan `product_id` di transaksi. Endpoint detail ini menerima
+  /// ID dari transaksi dan mengembalikan produk aslinya (lengkap dengan nama).
+  /// Response `data` berupa object (bukan list).
+  Future<ProductModel?> getProductDetail({
+    required String accessToken,
+    required String businessId,
+    required String productId,
+  }) async {
+    final uri = Uri.parse(
+      '${ApiConstants.baseUrl}/waveup/$businessId/product/'
+      '${Uri.encodeComponent(productId)}',
+    );
+
+    final formattedToken = accessToken.startsWith('Bearer ')
+        ? accessToken
+        : 'Bearer $accessToken';
+
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': ApiConstants.basicAuthCredential,
+      'Access-Token': formattedToken,
+    };
+
+    debugPrint('[ProductService] DETAIL GET URL: $uri');
+
+    http.Response response;
+    try {
+      response = await http.get(uri, headers: headers);
+      debugPrint('[ProductService] DETAIL STATUS: ${response.statusCode}');
+    } catch (e) {
+      throw ApiNetworkException(
+        'Gagal terhubung ke server saat ambil detail produk: $e',
+      );
+    }
+
+    Map<String, dynamic> decoded;
+    try {
+      decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      throw ApiException(
+        'Response server tidak valid (bukan JSON). Status: ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
+    }
+
+    if (response.statusCode != 200 || decoded['status'] != 200) {
+      throw ApiException(
+        decoded['message']?.toString() ?? 'Gagal mengambil detail produk.',
+        statusCode: response.statusCode,
+      );
+    }
+
+    final data = decoded['data'];
+    if (data is Map) {
+      return ProductModel.fromJson(data.cast<String, dynamic>());
+    }
+    if (data is List && data.isNotEmpty && data.first is Map) {
+      return ProductModel.fromJson((data.first as Map).cast<String, dynamic>());
+    }
+    return null;
+  }
 }

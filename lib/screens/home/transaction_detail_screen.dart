@@ -44,8 +44,10 @@ class TransactionDetailScreen extends ConsumerWidget {
         ),
         data: (detail) => RefreshIndicator(
           color: _kAccent,
-          onRefresh: () async =>
-              ref.invalidate(transactionDetailProvider(idTransaction)),
+          onRefresh: () async {
+            ref.invalidate(productLookupProvider);
+            ref.invalidate(transactionDetailProvider(idTransaction));
+          },
           child: _DetailBody(detail: detail),
         ),
       ),
@@ -198,17 +200,6 @@ class _HeroCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      transaction.number.isNotEmpty
-                          ? transaction.number
-                          : transaction.reference,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () => _copyOrderNumber(context),
                       child: Row(
@@ -614,6 +605,7 @@ class _ItemsContent extends ConsumerWidget {
               var product = _matchProduct(revealedCatalog, item);
               product ??=
                   fullLookup[item.productUuid] ??
+                  fullLookup['pid:${item.productId}'] ??
                   fullLookup[item.productId.toString()] ??
                   fullLookup[item.skuId];
               if (product == null) {
@@ -626,8 +618,16 @@ class _ItemsContent extends ConsumerWidget {
                   'fullLookup.length=${fullLookup.length}',
                 );
               }
-              final sku = _matchSku(product, item);
-              return _ItemRow(item: item, product: product, sku: sku);
+              if (product != null) {
+                return _ItemRow(
+                  item: item,
+                  product: product,
+                  sku: _matchSku(product, item),
+                );
+              }
+              // Tidak ketemu di katalog -> ambil detail produk langsung dari
+              // API (GET /product/{id}) supaya nama asli tetap tampil.
+              return _ItemRowResolver(item: item, matchSku: _matchSku);
             },
           ),
           if (i != transaction.items.length - 1)
@@ -643,12 +643,38 @@ class _ItemsContent extends ConsumerWidget {
   }
 }
 
+/// Ambil detail produk dari API untuk item yang tidak ketemu di katalog.
+class _ItemRowResolver extends ConsumerWidget {
+  final TransactionItemModel item;
+  final ProductSku? Function(ProductModel?, TransactionItemModel) matchSku;
+
+  const _ItemRowResolver({required this.item, required this.matchSku});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final key = '${item.productUuid}|${item.productId}';
+    final detailAsync = ref.watch(productDetailProvider(key));
+
+    return detailAsync.when(
+      loading: () => _ItemRow(item: item, loading: true),
+      error: (_, __) => _ItemRow(item: item),
+      data: (p) => _ItemRow(item: item, product: p, sku: matchSku(p, item)),
+    );
+  }
+}
+
 class _ItemRow extends StatelessWidget {
   final TransactionItemModel item;
   final ProductModel? product;
   final ProductSku? sku;
+  final bool loading;
 
-  const _ItemRow({required this.item, this.product, this.sku});
+  const _ItemRow({
+    required this.item,
+    this.product,
+    this.sku,
+    this.loading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -658,15 +684,24 @@ class _ItemRow extends StatelessWidget {
     // tidak ketemu di katalog (mis. belum ke-load / sudah dihapus), fallback
     // ke "Produk #<id>" + SKU dipendekin, bukan hash mentah sebagai judul.
     final matched = product != null;
+    final apiName = item.productName.trim();
+    final hasName = matched || apiName.isNotEmpty;
     final shortSku = item.hasSku && item.skuId.length > 10
         ? '${item.skuId.substring(0, 10)}…'
         : item.skuId;
-    final title = matched ? product!.name : 'Produk #${item.productId}';
+    // Prioritas nama: dari katalog -> dari item transaksi (API) -> fallback.
+    final title = matched && product!.name.trim().isNotEmpty
+        ? product!.name
+        : (apiName.isNotEmpty
+              ? apiName
+              : (loading
+                    ? 'Memuat nama produk…'
+                    : 'Produk #${item.productId}'));
 
     final subtitleParts = <String>[
       if (matched && sku != null && sku!.label.isNotEmpty) sku!.label,
       '${item.quantity} x ${TransactionModel.formatRupiah(item.price)}',
-      if (!matched && item.hasSku) 'SKU $shortSku',
+      if (!hasName && item.hasSku) 'SKU $shortSku',
     ];
 
     return Padding(

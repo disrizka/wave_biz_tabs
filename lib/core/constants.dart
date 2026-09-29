@@ -33,6 +33,7 @@ class StorageKeys {
   static const String tokenSavedAt = 'token_saved_at';
   static const String userData = 'user_data';
   static const String businessData = 'business_data';
+  static const String activeBusinessId = 'active_business_id';
 }
 
 class AssetPaths {

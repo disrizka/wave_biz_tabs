@@ -87,13 +87,20 @@ class AuthNotifier extends Notifier<AuthState> {
     final businessList = session['business'] as List<BusinessModel>;
     final savedAt = session['savedAt'] as DateTime;
 
+    // Pulihkan bisnis terakhir yang dipilih user. Kalau tidak ada / sudah
+    // tidak ada di daftar bisnis, baru pakai bisnis pertama.
+    final savedBusinessId = await _storage.loadActiveBusinessId();
+    final hasSaved =
+        savedBusinessId != null &&
+        businessList.any((b) => b.idBusiness == savedBusinessId);
+
     state = state.copyWith(
       token: token,
       user: user,
       businessList: businessList,
-      activeBusinessId: businessList.isNotEmpty
-          ? businessList.first.idBusiness
-          : null,
+      activeBusinessId: hasSaved
+          ? savedBusinessId
+          : (businessList.isNotEmpty ? businessList.first.idBusiness : null),
     );
 
     final elapsed = DateTime.now().difference(savedAt);
@@ -166,6 +173,11 @@ class AuthNotifier extends Notifier<AuthState> {
 
     _scheduleRefresh(remaining: AppConstants.tokenRefreshInterval);
 
+    // Login baru -> mulai dari bisnis pertama dan simpan sebagai pilihan.
+    if (result.business.isNotEmpty) {
+      await _storage.saveActiveBusinessId(result.business.first.idBusiness);
+    }
+
     state = state.copyWith(
       status: AuthStatus.authenticated,
       isLoading: false,
@@ -181,6 +193,8 @@ class AuthNotifier extends Notifier<AuthState> {
 
   void setActiveBusiness(String idBusiness) {
     state = state.copyWith(activeBusinessId: idBusiness);
+    // Simpan permanen supaya tetap sama setelah aplikasi di-restart.
+    unawaited(_storage.saveActiveBusinessId(idBusiness));
   }
 
   void _scheduleRefresh({required Duration remaining}) {

@@ -50,24 +50,42 @@ class CartState {
   /// quantity-nya keliatan "reset" ke 0 di kartu produk padahal item-nya
   /// masih ada di cart/order summary.
   int quantityOfProduct(ProductModel product) {
-    final candidates = _candidateIdsOf(product);
-    if (candidates.isEmpty) return 0;
     return items
-        .where((i) => candidates.contains(normalizeCartId(i.productId)))
+        .where((i) => itemMatchesProduct(i, product))
         .fold(0, (sum, i) => sum + i.quantity);
   }
 
-  /// Cart line non-variant yang match produk ini lewat [_candidateIdsOf].
-  /// Dipakai buat nemuin cartLineId "asli" yang tersimpan di cart, biar
-  /// tombol +/-/hapus di kartu produk tetap ngenain baris yang benar
-  /// walaupun ID hasil fetch katalog yang sekarang beda dari yang
-  /// ke-simpen waktu item itu pertama kali ditambahin.
+  /// Apakah baris cart [item] adalah produk [p] di katalog.
+  ///
+  /// idProduct/idProductSku di-encode ulang backend di TIAP response, jadi
+  /// ID yang tersimpan di cart sebelum restart tidak akan sama dengan ID
+  /// katalog yang baru di-fetch. Urutan pencocokan:
+  ///  1. UUID produk (stabil) -> paling akurat.
+  ///  2. Item lama (belum punya UUID): idProduct/uuid/code, lalu UUID SKU
+  ///     (stabil, untuk produk varian), lalu nama produk.
+  static bool itemMatchesProduct(CartItem item, ProductModel p) {
+    if (item.productUuid.isNotEmpty && p.uuid.isNotEmpty) {
+      return normalizeCartId(item.productUuid) == normalizeCartId(p.uuid);
+    }
+    if (_candidateIdsOf(p).contains(normalizeCartId(item.productId))) {
+      return true;
+    }
+    if (item.skuUuid.isNotEmpty && p.skus.any((s) => s.uuid == item.skuUuid)) {
+      return true;
+    }
+    final itemName = item.name.trim().toLowerCase();
+    return item.productUuid.isEmpty &&
+        itemName.isNotEmpty &&
+        itemName == p.name.trim().toLowerCase();
+  }
+
+  /// Cart line non-variant yang match produk ini. Dipakai buat nemuin
+  /// cartLineId "asli" yang tersimpan di cart, biar tombol +/-/hapus di
+  /// kartu produk tetap ngenain baris yang benar walaupun ID katalog yang
+  /// sekarang beda dari yang ke-simpen waktu item itu ditambahin.
   CartItem? matchingItem(ProductModel product) {
-    final candidates = _candidateIdsOf(product);
-    if (candidates.isEmpty) return null;
     for (final item in items) {
-      if (item.skuUuid.isEmpty &&
-          candidates.contains(normalizeCartId(item.productId))) {
+      if (item.skuUuid.isEmpty && itemMatchesProduct(item, product)) {
         return item;
       }
     }
@@ -162,16 +180,13 @@ class CartNotifier extends Notifier<CartState> {
     );
     final items = [...state.items];
 
-    // Dicocokkan longgar (idProduct/uuid/code manapun yang match), bukan
-    // cuma cartLineId yang persis sama — biar produk yang udah ada di cart
-    // (mis. dari draft yang dimuat ulang, atau sebelum app di-restart)
-    // nggak dobel jadi baris baru cuma gara-gara katalog produk di-fetch
-    // ulang dan ID-nya kebetulan beda dikit dari yang ke-simpen.
-    final candidates = CartState._candidateIdsOf(product);
+    // Dicocokkan lewat UUID produk (stabil) + fallback ID lama, supaya produk
+    // yang sudah ada di cart (mis. sebelum app di-restart) tidak dobel jadi
+    // baris baru hanya karena idProduct dari server berubah.
     final index = items.indexWhere((i) {
       if (i.skuUuid != newItem.skuUuid) return false;
       if (i.cartLineId == newItem.cartLineId) return true;
-      return candidates.contains(normalizeCartId(i.productId));
+      return CartState.itemMatchesProduct(i, product);
     });
 
     if (index == -1) {
@@ -180,6 +195,9 @@ class CartNotifier extends Notifier<CartState> {
       items[index] = items[index].copyWith(
         quantity: items[index].quantity + quantity,
         note: note.isNotEmpty ? note : null,
+        // Perbarui ID ke versi katalog terbaru + isi UUID untuk item lama.
+        productId: newItem.productId,
+        productUuid: newItem.productUuid,
       );
     }
     state = state.copyWith(items: items);

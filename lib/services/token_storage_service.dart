@@ -80,7 +80,18 @@ class TokenStorageService {
     };
   }
 
+  /// Simpan bisnis yang lagi aktif supaya pilihan user tetap sama setelah
+  /// aplikasi di-restart.
+  Future<void> saveActiveBusinessId(String idBusiness) async {
+    await _storage.write(key: StorageKeys.activeBusinessId, value: idBusiness);
+  }
+
+  Future<String?> loadActiveBusinessId() async {
+    return _storage.read(key: StorageKeys.activeBusinessId);
+  }
+
   Future<void> clearSession() async {
+    await _storage.delete(key: StorageKeys.activeBusinessId);
     await _storage.delete(key: StorageKeys.accessToken);
     await _storage.delete(key: StorageKeys.refreshToken);
     await _storage.delete(key: StorageKeys.tokenSavedAt);

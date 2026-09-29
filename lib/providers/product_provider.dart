@@ -426,50 +426,107 @@ final productHomeProvider =
 /// `product_sku_id` yang dikirim saat checkout ([SaleItem.productSkuId])
 /// hampir selalu match dengan salah satu SKU produknya, jadi ini jalur
 /// pencocokan paling reliable kalau match by product ID gagal.
-final productLookupProvider = FutureProvider<Map<String, ProductModel>>((
-  ref,
-) async {
-  final auth = ref.watch(authProvider);
-  final token = auth.accessToken ?? '';
-  final businessId = auth.activeBusinessId ?? '';
-  if (token.isEmpty || businessId.isEmpty) return {};
+final productLookupProvider =
+    FutureProvider.autoDispose<Map<String, ProductModel>>((ref) async {
+      final auth = ref.watch(authProvider);
+      final token = auth.accessToken ?? '';
+      final businessId = auth.activeBusinessId ?? '';
+      if (token.isEmpty || businessId.isEmpty) return {};
 
-  final service = ProductService();
-  final Map<String, ProductModel> byKey = {};
+      final service = ProductService();
+      final Map<String, ProductModel> byKey = {};
 
-  var page = 1;
-  const maxPages = 25; // jaga-jaga, batas wajar biar gak looping tanpa henti
-  while (page <= maxPages) {
-    final ProductFlatResponse resp;
-    try {
-      resp = await service.getProductsFlat(
-        accessToken: token,
-        businessId: businessId,
-        page: page,
-        limit: 200,
-      );
-    } catch (_) {
-      break;
-    }
+      var page = 1;
+      const maxPages =
+          60; // jaga-jaga, batas wajar biar gak looping tanpa henti
+      while (page <= maxPages) {
+        ProductFlatResponse? resp;
+        // Pakai limit default (50) seperti layar POS. Limit 200 sebelumnya bisa
+        // ditolak backend, dan error-nya ketelan -> lookup kosong -> nama produk
+        // jatuh ke "Produk #<id>".
+        for (var attempt = 0; attempt < 2 && resp == null; attempt++) {
+          try {
+            resp = await service.getProductsFlat(
+              accessToken: token,
+              businessId: businessId,
+              page: page,
+            );
+          } catch (e) {
+            debugPrint(
+              '[productLookupProvider] halaman $page gagal '
+              '(percobaan ${attempt + 1}): $e',
+            );
+            if (attempt == 0) {
+              await Future.delayed(const Duration(milliseconds: 600));
+            }
+          }
+        }
 
-    for (final p in resp.products) {
-      if (p.idProduct.isNotEmpty) byKey[p.idProduct] = p;
-      if (p.uuid.isNotEmpty) byKey[p.uuid] = p;
-      for (final s in p.skus) {
-        if (s.uuid.isNotEmpty) byKey[s.uuid] = p;
-        if (s.idProductSku.isNotEmpty) byKey[s.idProductSku] = p;
+        if (resp == null) {
+          // Halaman pertama gagal total -> lempar error supaya tidak di-cache
+          // sebagai "sukses kosong". Halaman berikutnya gagal -> pakai yang ada.
+          if (page == 1) {
+            throw Exception(
+              'Gagal memuat katalog produk untuk mencocokkan nama.',
+            );
+          }
+          break;
+        }
+
+        for (final p in resp.products) {
+          if (p.idProduct.isNotEmpty) byKey[p.idProduct] = p;
+          if (p.uuid.isNotEmpty) byKey[p.uuid] = p;
+          if (p.numericId > 0) byKey.putIfAbsent('pid:${p.numericId}', () => p);
+          for (final s in p.skus) {
+            if (s.uuid.isNotEmpty) byKey[s.uuid] = p;
+            if (s.idProductSku.isNotEmpty) byKey[s.idProductSku] = p;
+          }
+        }
+
+        if (!resp.page.hasMorePages) break;
+        page++;
       }
-    }
 
-    if (!resp.page.hasMorePages) break;
-    page++;
-  }
+      debugPrint(
+        '[productLookupProvider] selesai: ${byKey.length} key ke-index dari '
+        'katalog produk. Contoh key: ${byKey.keys.take(5).toList()}',
+      );
 
-  debugPrint(
-    '[productLookupProvider] selesai: ${byKey.length} key ke-index dari '
-    'katalog produk. Contoh key: '
-    '${byKey.keys.take(5).toList()}',
-  );
+      return byKey;
+    });
 
-  return byKey;
-});
+/// Detail produk untuk satu item transaksi, lewat
+/// `GET /waveup/{businessId}/product/{id}`.
+///
+/// [key] = "<product_id dari transaksi>|<ProductID numerik>". ID dicoba
+/// berurutan; yang pertama mengembalikan produk bernama dipakai. Ini jalur
+/// utama untuk menampilkan nama asli karena ID katalog (idProduct) berubah
+/// di tiap response sehingga tidak bisa dicocokkan dengan string equality.
+final productDetailProvider = FutureProvider.autoDispose
+    .family<ProductModel?, String>((ref, key) async {
+      final auth = ref.watch(authProvider);
+      final token = auth.accessToken ?? '';
+      final businessId = auth.activeBusinessId ?? '';
+      if (token.isEmpty || businessId.isEmpty) return null;
+
+      final candidates = key
+          .split('|')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty && e != '0')
+          .toList();
+
+      final service = ProductService();
+      for (final id in candidates) {
+        try {
+          final product = await service.getProductDetail(
+            accessToken: token,
+            businessId: businessId,
+            productId: id,
+          );
+          if (product != null && product.name.trim().isNotEmpty) return product;
+        } catch (e) {
+          debugPrint('[productDetailProvider] id="$id" gagal: $e');
+        }
+      }
+      return null;
+    });

@@ -82,6 +82,10 @@ class ProductImage {
 
 class ProductModel {
   final String idProduct;
+
+  /// ID numerik internal produk (dipakai endpoint transaksi sebagai
+  /// `ProductID`). Bisa 0 kalau endpoint katalog tidak mengirimnya.
+  final int numericId;
   final String uuid;
   final String code;
   final String name;
@@ -92,6 +96,7 @@ class ProductModel {
 
   ProductModel({
     required this.idProduct,
+    this.numericId = 0,
     required this.uuid,
     this.code = '',
     required this.name,
@@ -108,7 +113,18 @@ class ProductModel {
     final imagesRaw =
         (json['images'] as List?) ?? (json['productImages'] as List?) ?? [];
 
+    int numeric = 0;
+    for (final key in const ['ProductID', 'productID', 'productId', 'id']) {
+      final v = json[key];
+      final n = v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
+      if (n != null && n > 0) {
+        numeric = n;
+        break;
+      }
+    }
+
     return ProductModel(
+      numericId: numeric,
       idProduct: json['idProduct']?.toString() ?? '',
       uuid: json['uuid']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
