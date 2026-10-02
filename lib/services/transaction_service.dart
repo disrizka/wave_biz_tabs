@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:wave_biz_tabs/core/constants.dart';
 import 'package:wave_biz_tabs/models/transaction_model.dart';
-import 'package:wave_biz_tabs/services/api_service.dart'; 
+import 'package:wave_biz_tabs/services/api_service.dart';
 
 enum PaymentMethod {
   cash(1, 'Tunai'),
-  midtransDebit(2, 'Midtrans Debit'), 
+  midtransDebit(2, 'Midtrans Debit'),
   midtransRegular(3, 'Midtrans Biasa (QRIS / Snap)'),
-  edc(4, 'EDC'), 
+  edc(4, 'EDC'),
   tt(5, 'TT'),
   shopee(6, 'Shopee');
 
@@ -70,7 +70,7 @@ class TransactionSaleResult {
 }
 
 class PaymentCheckResult {
-  final String status; 
+  final String status;
 
   PaymentCheckResult({required this.status});
 
@@ -131,7 +131,65 @@ class TransactionService {
     );
     final response = await _client.get(uri, headers: _headers(accessToken));
     final decoded = _decodeOrThrow(response);
-    return TransactionDetailResponse.fromJson(decoded);
+    final result = TransactionDetailResponse.fromJson(decoded);
+    return _withProductNames(
+      result,
+      accessToken: accessToken,
+      businessId: businessId,
+      idTransaction: idTransaction,
+    );
+  }
+
+  /// Endpoint payment-check tidak mengirim nama produk, jadi nama diambil dari
+  /// endpoint detail `.../transaction/sales/{idTransaction}` (product.name)
+  /// lalu digabungkan ke item. Kalau gagal, hasil awal dikembalikan apa adanya.
+  Future<TransactionDetailResponse> _withProductNames(
+    TransactionDetailResponse result, {
+    required String accessToken,
+    required String businessId,
+    required String idTransaction,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        ApiConstants.transactionSaleDetail(businessId, idTransaction),
+      );
+      final response = await _client.get(uri, headers: _headers(accessToken));
+      if (response.statusCode != 200) return result;
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final detail = TransactionDetailResponse.fromJson(decoded);
+
+      final byItemId = <String, String>{};
+      final bySku = <String, String>{};
+      final byProductId = <int, String>{};
+      for (final it in detail.transaction.items) {
+        final name = it.productName.trim();
+        if (name.isEmpty) continue;
+        if (it.idTransactionItem.isNotEmpty)
+          byItemId[it.idTransactionItem] = name;
+        if (it.skuId.isNotEmpty) bySku[it.skuId] = name;
+        if (it.productId != 0) byProductId[it.productId] = name;
+      }
+      if (byItemId.isEmpty && bySku.isEmpty && byProductId.isEmpty) {
+        return result;
+      }
+
+      final merged = result.transaction.items.map((it) {
+        if (it.productName.trim().isNotEmpty) return it;
+        final name =
+            byItemId[it.idTransactionItem] ??
+            bySku[it.skuId] ??
+            byProductId[it.productId];
+        return name == null ? it : it.withProductName(name);
+      }).toList();
+
+      return TransactionDetailResponse(
+        transaction: result.transaction.withItems(merged),
+        paymentStatus: result.paymentStatus,
+        message: result.message,
+      );
+    } catch (_) {
+      return result;
+    }
   }
 
   Future<TransactionSaleResult> createSale({

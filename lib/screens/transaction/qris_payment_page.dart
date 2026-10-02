@@ -74,6 +74,26 @@ class _QrisPaymentPageState extends State<QrisPaymentPage> {
       _errorDetail = null;
     });
 
+    if (!MidtransConstants.isConfigured) {
+      setState(() {
+        _state = _FlowState.initError;
+        _errorDetail =
+            'Midtrans client key belum diatur. Jalankan app dengan '
+            '--dart-define=MIDTRANS_CLIENT_KEY=<client key>.';
+      });
+      return;
+    }
+
+    // Log ini dipakai untuk membandingkan HP vs emulator. Kalau environment
+    // di sini (SANDBOX/PRODUCTION) beda dengan environment Server Key di
+    // backend, Snap akan menampilkan "Transaksi tidak ditemukan".
+    debugPrint(
+      '[QrisPaymentPage] env=${MidtransConstants.environmentLabel} '
+      'clientKey=${MidtransConstants.clientKey.substring(0, MidtransConstants.clientKey.length.clamp(0, 14))}… '
+      'token=${widget.paymentToken} idTransaction=${widget.idTransaction} '
+      'api=${ApiConstants.baseUrl}',
+    );
+
     try {
       _midtrans = await MidtransSDK.init(
         config: MidtransConfig(

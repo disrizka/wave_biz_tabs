@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:wave_biz_tabs/services/receipt_printer_service.dart';
 
 const _kAccent = Color(0xFF008080);
@@ -19,7 +18,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   final _svc = ReceiptPrinterService.instance;
 
   PrinterConfig _config = const PrinterConfig();
-  List<BluetoothInfo> _devices = const [];
+  List<PairedPrinter> _devices = const [];
   bool _loading = true;
   bool _busy = false;
   String? _problem;
@@ -71,8 +70,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     );
   }
 
-  Future<void> _selectPrinter(BluetoothInfo d) async {
-    await _save(_config.copyWith(mac: d.macAdress, name: d.name));
+  Future<void> _selectPrinter(PairedPrinter d) async {
+    if (!isValidMac(d.mac)) {
+      _toast('MAC printer tidak valid, tidak bisa dipilih.', error: true);
+      return;
+    }
+    await _save(_config.copyWith(mac: d.mac, name: d.name));
     _toast('Printer dipilih: ${d.name}');
   }
 
@@ -125,7 +128,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       subtitle: Text(
                         _config.hasPrinter
                             ? _config.mac
-                            : 'Pilih printer dari daftar di bawah',
+                            : (_config.name.isNotEmpty
+                                  ? 'MAC tidak valid, pilih ulang dari daftar di bawah'
+                                  : 'Pilih printer dari daftar di bawah'),
                       ),
                     ),
                   ),
@@ -211,16 +216,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                       child: ListTile(
                         leading: Icon(
                           Icons.bluetooth_rounded,
-                          color: d.macAdress == _config.mac
-                              ? _kAccent
-                              : Colors.grey,
+                          color: d.mac == _config.mac ? _kAccent : Colors.grey,
                         ),
                         title: Text(
                           d.name,
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        subtitle: Text(d.macAdress),
-                        trailing: d.macAdress == _config.mac
+                        subtitle: Text(d.mac),
+                        trailing: d.mac == _config.mac
                             ? const Icon(
                                 Icons.check_circle_rounded,
                                 color: _kAccent,

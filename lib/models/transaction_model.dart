@@ -32,6 +32,23 @@ class TransactionItemModel {
     this.productName = '',
   });
 
+  /// Salinan item dengan nama produk diganti (dipakai untuk melengkapi nama
+  /// dari endpoint detail transaksi).
+  TransactionItemModel withProductName(String name) {
+    return TransactionItemModel(
+      idTransactionItem: idTransactionItem,
+      transactionReference: transactionReference,
+      productId: productId,
+      productUuid: productUuid,
+      skuId: skuId,
+      qtyIn: qtyIn,
+      qtyOut: qtyOut,
+      price: price,
+      discount: discount,
+      productName: name,
+    );
+  }
+
   int get quantity => qtyOut - qtyIn;
 
   bool get hasSku => skuId.isNotEmpty;
@@ -161,6 +178,28 @@ class TransactionModel {
     this.createdAt = '',
     this.items = const [],
   });
+
+  /// Salinan transaksi dengan daftar item diganti.
+  TransactionModel withItems(List<TransactionItemModel> newItems) {
+    return TransactionModel(
+      idTransaction: idTransaction,
+      storeLocationId: storeLocationId,
+      storeLocationName: storeLocationName,
+      businessName: businessName,
+      type: type,
+      number: number,
+      customer: customer,
+      note: note,
+      reference: reference,
+      status: status,
+      amount: amount,
+      discount: discount,
+      orderAt: orderAt,
+      paymentMethod: paymentMethod,
+      createdAt: createdAt,
+      items: newItems,
+    );
+  }
 
   TransactionOrderType get orderType =>
       type == 1 ? TransactionOrderType.dineIn : TransactionOrderType.takeaway;

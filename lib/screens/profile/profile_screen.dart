@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wave_biz_tabs/models/business_model.dart';
 import 'package:wave_biz_tabs/providers/auth_provider.dart';
 import 'package:wave_biz_tabs/screens/home/widgets/business_switcher_sheet.dart';
-import 'package:wave_biz_tabs/screens/profile/printer_settings_screen.dart';
+import 'package:wave_biz_tabs/screens/settings/thermal_printer_setting_screen.dart';
 
 const _kBrandBlue = Color(0xFF008080);
 const _kBrandBlueDark = Color(0xFF00695C);
@@ -265,12 +265,12 @@ class ProfileScreen extends ConsumerWidget {
                         icon: Icons.print_rounded,
                         iconBg: const Color(0xFFE0F2F1),
                         iconColor: _kBrandBlue,
-                        title: 'Printer Struk',
-                        subtitle:
-                            'Pilih printer thermal Bluetooth untuk cetak struk',
+                        title: 'Printer Thermal',
+                        subtitle: 'Pilih printer, ukuran kertas & test print',
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const PrinterSettingsScreen(),
+                            builder: (_) =>
+                                const ThermalPrinterSettingsScreen(),
                           ),
                         ),
                       ),

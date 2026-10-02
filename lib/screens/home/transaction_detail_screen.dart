@@ -170,8 +170,6 @@ class _HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTakeaway = transaction.orderType == TransactionOrderType.takeaway;
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
@@ -230,13 +228,6 @@ class _HeroCard extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              _HeroChip(
-                icon: isTakeaway
-                    ? Icons.shopping_bag_outlined
-                    : Icons.restaurant_outlined,
-                label: transaction.orderTypeLabel,
-              ),
-              const SizedBox(width: 8),
               _HeroChip(
                 icon: Icons.schedule_rounded,
                 label: transaction.formattedDate,

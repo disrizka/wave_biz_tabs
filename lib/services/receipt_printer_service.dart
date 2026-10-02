@@ -2,11 +2,24 @@ import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wave_biz_tabs/models/receipt_model.dart';
+
+final RegExp _macRegex = RegExp(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$');
+
+/// MAC Bluetooth valid, format AA:BB:CC:DD:EE:FF.
+bool isValidMac(String s) => _macRegex.hasMatch(s.trim());
+
+/// Printer Bluetooth yang sudah di-pair di perangkat.
+class PairedPrinter {
+  final String name;
+  final String mac;
+  const PairedPrinter({required this.name, required this.mac});
+}
 
 /// Pengaturan printer yang disimpan permanen di perangkat.
 class PrinterConfig {
@@ -22,7 +35,9 @@ class PrinterConfig {
     this.autoPrint = true,
   });
 
-  bool get hasPrinter => mac.isNotEmpty;
+  /// True hanya kalau MAC-nya valid. Tanpa MAC valid, Android tidak bisa
+  /// connect, jadi dianggap "belum diatur".
+  bool get hasPrinter => isValidMac(mac);
 
   PrinterConfig copyWith({
     String? mac,
@@ -82,26 +97,81 @@ class ReceiptPrinterService {
 
   Future<bool> ensurePermissions() async {
     if (!Platform.isAndroid) return true;
-    final status = await Permission.bluetoothConnect.request();
-    if (status.isGranted) return true;
+    final statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+    ].request();
+    if (statuses[Permission.bluetoothConnect]?.isGranted == true) return true;
     // Android < 12 tidak butuh izin runtime.
     return PrintBluetoothThermal.isPermissionBluetoothGranted;
   }
 
   Future<bool> isBluetoothOn() => PrintBluetoothThermal.bluetoothEnabled;
 
-  Future<List<BluetoothInfo>> pairedPrinters() =>
-      PrintBluetoothThermal.pairedBluetooths;
+  static const MethodChannel _btChannel = MethodChannel('bt/paired');
 
-  Future<bool> _ensureConnected(String mac) async {
-    if (await PrintBluetoothThermal.connectionStatus) return true;
-    if (await PrintBluetoothThermal.connect(macPrinterAddress: mac)) {
-      return true;
+  /// Daftar printer yang sudah di-pair (nama + MAC valid).
+  /// Sumber utama: channel native `bt/paired` (MAC pasti terisi), lalu
+  /// ditambah hasil plugin. Sama seperti alur di waze-app.
+  Future<List<PairedPrinter>> pairedPrinters() async {
+    final byMac = <String, PairedPrinter>{};
+
+    if (Platform.isAndroid) {
+      try {
+        final res = await _btChannel.invokeMethod('getBonded');
+        if (res is List) {
+          for (final e in res) {
+            if (e is! Map) continue;
+            final mac = (e['address'] ?? '').toString().trim();
+            if (!isValidMac(mac)) continue;
+            byMac[mac.toUpperCase()] = PairedPrinter(
+              name: (e['name'] ?? '').toString(),
+              mac: mac,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[ReceiptPrinter] getBonded error: $e');
+      }
     }
-    // Coba sekali lagi dari kondisi bersih.
-    await PrintBluetoothThermal.disconnect;
-    await Future.delayed(const Duration(milliseconds: 400));
-    return PrintBluetoothThermal.connect(macPrinterAddress: mac);
+
+    try {
+      for (final d in await PrintBluetoothThermal.pairedBluetooths) {
+        final mac = d.macAdress.trim();
+        if (!isValidMac(mac)) continue;
+        byMac.putIfAbsent(
+          mac.toUpperCase(),
+          () => PairedPrinter(name: d.name, mac: mac),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ReceiptPrinter] pairedBluetooths error: $e');
+    }
+
+    final list = byMac.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  }
+
+  /// Sama seperti waze-app: putus koneksi lama -> connect (retry 1x) ->
+  /// cek status -> jeda sebentar (warm-up) sebelum kirim data.
+  Future<bool> _ensureConnected(String mac) async {
+    try {
+      await PrintBluetoothThermal.disconnect;
+    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    var connected = await PrintBluetoothThermal.connect(macPrinterAddress: mac);
+    if (!connected) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      connected = await PrintBluetoothThermal.connect(macPrinterAddress: mac);
+    }
+    if (!connected) return false;
+
+    if (!await PrintBluetoothThermal.connectionStatus) return false;
+    await Future.delayed(const Duration(milliseconds: 120)); // warm-up
+    return true;
   }
 
   Future<bool> _write(List<int> bytes) async {
@@ -112,6 +182,7 @@ class ReceiptPrinterService {
       if (!ok) return false;
       await Future.delayed(const Duration(milliseconds: 40));
     }
+    await Future.delayed(const Duration(milliseconds: 120)); // biar tuntas
     return true;
   }
 
@@ -119,9 +190,11 @@ class ReceiptPrinterService {
     try {
       final config = await loadConfig();
       if (!config.hasPrinter) {
-        return const PrintResult(
+        return PrintResult(
           false,
-          'Printer belum dipilih. Atur di Profil > Printer Struk.',
+          config.name.isNotEmpty
+              ? 'MAC printer "${config.name}" tidak valid. Pilih ulang di Profil > Printer Struk.'
+              : 'Printer belum dipilih. Atur di Profil > Printer Struk.',
         );
       }
       if (!await ensurePermissions()) {

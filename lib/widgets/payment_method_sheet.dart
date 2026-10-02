@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wave_biz_tabs/screens/profile/printer_settings_screen.dart';
 import 'package:wave_biz_tabs/screens/transaction/qris_payment_page.dart';
 
 import '../../providers/checkout_provider.dart';
@@ -313,6 +314,15 @@ class _SuccessDialogState extends State<_SuccessDialog> {
     _init();
   }
 
+  Future<void> _openPrinterSettings() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PrinterSettingsScreen()));
+    if (!mounted) return;
+    setState(() => _state = _PrintUiState.idle);
+    await _init(); // sudah dipilih? langsung cetak struk ini
+  }
+
   Future<void> _init() async {
     final config = await ReceiptPrinterService.instance.loadConfig();
     if (!mounted) return;
@@ -444,6 +454,28 @@ class _SuccessDialogState extends State<_SuccessDialog> {
               ),
             ],
             const SizedBox(height: 22),
+            if (_state == _PrintUiState.noPrinter) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kAccent,
+                    side: const BorderSide(color: _kAccent),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _openPrinterSettings,
+                  icon: const Icon(Icons.settings_rounded, size: 18),
+                  label: const Text(
+                    'Atur Printer',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             if (hasReceipt && _state != _PrintUiState.noPrinter) ...[
               SizedBox(
                 width: double.infinity,
