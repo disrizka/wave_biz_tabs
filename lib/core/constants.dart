@@ -1,6 +1,6 @@
 class ApiConstants {
-  static const String baseUrl = 'https://wave-api.eon.id';
-  // static const String baseUrl = 'https://api.wave.id';
+  // static const String baseUrl = 'https://wave-api.eon.id';
+  static const String baseUrl = 'https://api.wave.id';
   static const String login = '$baseUrl/user/login';
   static const String refreshToken = '$baseUrl/user/refresh-token';
   static const String basicAuthCredential =
@@ -22,22 +22,12 @@ class ApiConstants {
 }
 
 class MidtransConstants {
-  /// Diisi lewat --dart-define supaya HP, emulator, dan build release
-  /// selalu memakai key yang sama dan tidak ikut ter-commit ke repo.
-  ///
-  ///   flutter run --dart-define=MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
-  ///   flutter build apk --release --dart-define=MIDTRANS_CLIENT_KEY=Mid-client-xxxx
-  ///
-  /// Sandbox  -> diawali "SB-Mid-client-"
-  /// Production -> diawali "Mid-client-"
-  /// Harus SAMA environment-nya dengan Server Key yang dipakai backend
-  /// saat membuat snap token (kalau beda -> "Transaksi tidak ditemukan").
-  static const String clientKey = String.fromEnvironment(
-    'MIDTRANS_CLIENT_KEY',
-    defaultValue: '',
-  );
+  // DEVELOPMENT (sandbox)
+  // static const String clientKey = 'SB-Mid-client-OlAvtRicKKPMklc4';
+  // PRODUCTION
+  static const String clientKey = 'Mid-client-ej_BQW5VVp_G2hAy';
 
-  static const String merchantBaseUrl = 'https://wave-api.eon.id/';
+  static const String merchantBaseUrl = '${ApiConstants.baseUrl}/';
 
   static bool get isConfigured => clientKey.isNotEmpty;
   static bool get isSandbox => clientKey.startsWith('SB-');
